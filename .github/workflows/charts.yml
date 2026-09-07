@@ -133,8 +133,10 @@ jobs:
         with:
           version: v3.19.0
 
+      # Pinned by SHA, not by tag. cosign-installer publishes no floating v4, and a
+      # signing tool is the last action to let float anyway.
       - name: Install cosign
-        uses: sigstore/cosign-installer@v4
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
 
       - name: Log in to GHCR
         run: |
