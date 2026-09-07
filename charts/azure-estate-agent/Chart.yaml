@@ -3,7 +3,7 @@ name: azure-estate-agent
 description: Reports Kubernetes workloads from inside an AKS cluster to an Azure Estate Portal. Outbound only — the portal never connects to the cluster.
 type: application
 
-version: 0.1.0
+version: 0.1.1
 appVersion: "0.7.0"
 
 home: https://github.com/TrimTechBr/charts
@@ -31,3 +31,5 @@ annotations:
   artifacthub.io/changes: |
     - kind: added
       description: First release of the chart, replacing the raw manifests under deploy/k8s-agent
+    - kind: fixed
+      description: 0.1.0 was published unsigned because cosign could not authenticate to the registry; use this version
