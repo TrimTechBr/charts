@@ -1,0 +1,50 @@
+{{ .Chart.Name }} {{ .Chart.Version }} — agent {{ .Chart.AppVersion }}
+
+Installed in namespace {{ .Release.Namespace }}, reporting to:
+
+    {{ .Values.portal.url }}
+
+The first scheduled scan runs at "{{ .Values.scan.schedule }}". To collect now
+without waiting:
+
+    kubectl --namespace {{ .Release.Namespace }} create job --from=cronjob/{{ include "agent.cronJobName" . }} first-scan
+    kubectl --namespace {{ .Release.Namespace }} logs job/first-scan
+
+{{ if .Values.listener.enabled -}}
+Or press "Scan now" in the portal under Kubernetes → Clusters. The listener picks
+it up within {{ .Values.listener.pollSeconds }}s and creates the job itself.
+{{- else -}}
+The listener is disabled, so "Scan now" in the portal has nothing to pick the
+request up. Scans only run on the schedule above.
+{{- end }}
+
+The data appears in the portal on its NEXT sync, not immediately: the payload is
+staged and a sync run consumes it, so a snapshot stays the picture of one instant.
+
+Two things to check if nothing arrives:
+
+    kubectl --namespace {{ .Release.Namespace }} logs job/<the scan job>
+
+  401  the key is not registered, or was revoked in the portal
+  403  portal.clusterId names a different cluster than the key belongs to
+  413  the payload is over the portal's limit — lower scan.maxPods
+  400  the portal is older than this agent — upgrade the portal
+
+And that this cluster can reach {{ .Values.portal.url }} outbound. Nothing
+connects the other way, so there is no inbound rule to check.
+
+{{ if not .Values.rbac.secretMetadata -}}
+Secret metadata is not collected, so the portal cannot report Secrets that no
+workload uses. Which Secrets ARE used still works — that comes from pod specs.
+Turn it on with rbac.secretMetadata=true, after reading why it is off by default
+in values.yaml.
+{{- end }}
+
+{{- if and (not .Values.portal.existingSecret) .Values.portal.apiKey }}
+
+  The agent key was passed inline, so it is stored in the release and
+  `helm get values` will print it. Prefer:
+
+    kubectl --namespace {{ .Release.Namespace }} create secret generic estate-agent-key --from-literal=apiKey='<key>'
+    --set portal.existingSecret=estate-agent-key
+{{- end }}

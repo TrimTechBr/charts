@@ -1,0 +1,63 @@
+{{ .Chart.Name }} {{ .Chart.Version }} — Azure Estate Portal {{ .Chart.AppVersion }}
+
+{{ if .Values.ingress.enabled -}}
+Open the portal at:
+
+    {{ include "estate.apiBaseUrl" . }}
+
+{{- if not .Values.ingress.tls.enabled }}
+
+  TLS is off. The sign-in flow and every API call go over plain HTTP.
+{{- end }}
+{{- else -}}
+The ingress is disabled, so nothing is published. Point your own gateway at:
+
+    UI    {{ printf "%s-webapp" (include "estate.fullname" .) }}:80
+    API   {{ printf "%s-api" (include "estate.fullname" .) }}:80
+
+  The UI calls {{ include "estate.apiBaseUrl" . }} from the browser. If that is a
+  different origin than the UI is served from, set Cors__AllowedOrigins__0 on the
+  API through config.extra, or the browser will block every call with no message
+  on screen.
+{{- end }}
+
+Check it came up:
+
+    kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-api" (include "estate.fullname" .) }}
+    kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-worker" (include "estate.fullname" .) }}
+
+{{ if .Values.azure.workloadIdentity.enabled -}}
+Azure access uses workload identity. The managed identity {{ .Values.azure.workloadIdentity.clientId }}
+needs a federated credential naming this cluster's OIDC issuer and this service
+account:
+
+    system:serviceaccount:{{ .Release.Namespace }}:{{ include "estate.serviceAccountName" . }}
+
+and, on the subscriptions in scope, the Reader and Monitoring Reader roles.
+{{- else if .Values.azure.clientSecret.enabled -}}
+Azure access uses a client secret. The service principal {{ .Values.azure.clientSecret.clientId }}
+needs Reader and Monitoring Reader on the subscriptions in scope.
+{{- end }}
+
+{{ if .Values.config.collectAcrDataPlane -}}
+Container registry contents also need AcrPull, granted per registry. A registry
+without it still appears with everything ARM reports; only its contents are
+missing, and the screen says so.
+{{ end -}}
+
+{{- if .Values.config.collectKubernetesWorkloads }}
+Workload collection is on. It stays empty until an agent is installed in each
+cluster — see the azure-estate-agent chart. Generate a key per cluster in the
+portal under Kubernetes → Clusters.
+{{- else }}
+Workload collection is off. To inventory what runs inside your AKS clusters, set
+config.collectKubernetesWorkloads=true and install the azure-estate-agent chart
+in each cluster.
+{{- end }}
+
+{{- if and (not .Values.database.existingSecret) .Values.database.connectionString }}
+
+  The database connection string was passed inline, so it is stored in the release
+  and `helm get values` will print it. Move it to a secret you manage and set
+  database.existingSecret when you get the chance.
+{{- end }}

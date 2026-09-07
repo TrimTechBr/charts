@@ -1,0 +1,7 @@
+portal:
+  url: https://estate.ci.example
+  clusterId: /subscriptions/00000000-0000-0000-0000-000000000000/resourceGroups/rg/providers/Microsoft.ContainerService/managedClusters/aks-ci
+  existingSecret: estate-agent-key
+image:
+  pullSecrets:
+    - name: ghcr

@@ -1,0 +1,93 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-webapp" (include "estate.fullname" .) }}
+  labels:
+    {{- include "estate.labels" . | nindent 4 }}
+    app.kubernetes.io/component: webapp
+spec:
+  replicas: {{ .Values.webapp.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "estate.componentSelectorLabels" (dict "root" . "component" "webapp") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "estate.componentSelectorLabels" (dict "root" . "component" "webapp") | nindent 8 }}
+      annotations:
+        {{- /*
+          The UI is a static WebAssembly bundle; its settings are written into
+          appsettings.json by the container's entrypoint at start. So a settings
+          change only reaches a browser after the pods restart, and this is what
+          restarts them.
+        */}}
+        checksum/webapp-config: {{ printf "%s|%s|%s" (include "estate.apiBaseUrl" .) .Values.webapp.azureAd.tenantId .Values.webapp.azureAd.clientId | sha256sum }}
+        {{- with .Values.webapp.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: webapp
+          image: {{ include "estate.image" (dict "root" . "component" "webapp") }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- /*
+              nginx writes its cache and pid under /var, and the entrypoint edits
+              appsettings.json in place, so this one filesystem cannot be read-only.
+            */}}
+            {{- toYaml (omit .Values.containerSecurityContext "readOnlyRootFilesystem") | nindent 12 }}
+            readOnlyRootFilesystem: false
+          ports:
+            - name: http
+              containerPort: 80
+          env:
+            {{- /*
+              What the browser calls. Not a cluster-internal name: this string ends
+              up in JavaScript running on someone's laptop.
+            */}}
+            - name: API_BASE_URL
+              value: {{ include "estate.apiBaseUrl" . | quote }}
+            {{- /*
+              Sign-in for the UI. Deliberately separate from the identity the
+              worker uses to read Azure — different question, possibly different
+              tenant.
+            */}}
+            - name: AZURE_TENANT_ID
+              value: {{ .Values.webapp.azureAd.tenantId | quote }}
+            - name: AZURE_CLIENT_ID
+              value: {{ .Values.webapp.azureAd.clientId | quote }}
+          livenessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /index.html
+              port: http
+            initialDelaySeconds: 3
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.webapp.resources | nindent 12 }}
+      {{- with .Values.webapp.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webapp.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.webapp.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

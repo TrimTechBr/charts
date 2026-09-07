@@ -1,0 +1,165 @@
+# Azure Estate Portal
+#
+# Three components on one hostname: the web UI at "/", the API at "/api". They
+# share a hostname on purpose — the browser then never makes a cross-origin
+# request, so there is no CORS configuration to get wrong.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  # The three images are <repository>/api, <repository>/worker and <repository>/webapp.
+  repository: trimtechbr/azure-estate
+  # Empty means the chart's appVersion, so the chart and the product it installs
+  # cannot drift by accident.
+  tag: ""
+  pullPolicy: IfNotPresent
+  # Needed while the packages are private. Create the secret first, e.g.
+  #   kubectl create secret docker-registry ghcr --docker-server=ghcr.io \
+  #     --docker-username=<user> --docker-password=<PAT with read:packages>
+  pullSecrets: []
+  # - name: ghcr
+
+# ── Database ────────────────────────────────────────────────────────────────
+# PostgreSQL is required. The API and the worker are separate deployments that
+# both write, so a file database would need shared writable storage and would
+# corrupt under two writers.
+database:
+  # Preferred: a secret you manage, so the connection string never passes through
+  # `helm get values` or the release secret.
+  existingSecret: ""
+  existingSecretKey: connectionString
+
+  # Convenience for a first install. The value lands in a chart-managed Secret and
+  # is readable with `helm get values`, so prefer existingSecret in production.
+  connectionString: ""
+
+# ── Azure identity ──────────────────────────────────────────────────────────
+# What the worker uses to read the estate. Needs Reader + Monitoring Reader on
+# the subscriptions or management groups in scope, and AcrPull per registry to
+# inventory container images.
+azure:
+  tenantId: ""
+
+  # On AKS with the OIDC issuer enabled. Nothing is stored: the token is projected
+  # into the pod.
+  workloadIdentity:
+    enabled: true
+    clientId: ""
+
+  # For a cluster that is not AKS. DefaultAzureCredential reads these three
+  # variables directly, so this needs no change in the application.
+  clientSecret:
+    enabled: false
+    clientId: ""
+    existingSecret: ""
+    existingSecretKey: clientSecret
+    # Same caveat as database.connectionString.
+    value: ""
+
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+
+# ── Ingress ─────────────────────────────────────────────────────────────────
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  host: estate.example.com
+
+  # Everything the API serves. "/api" covers the REST surface; add "/swagger" to
+  # expose the API explorer, or "/health" to probe from outside the cluster.
+  apiPaths:
+    - /api
+
+  tls:
+    enabled: false
+    # Empty with tls.enabled uses the ingress controller's default certificate.
+    secretName: ""
+
+# ── Components ──────────────────────────────────────────────────────────────
+api:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+
+worker:
+  # One. The sync claims runs from a queue in the database, and a second worker
+  # would race for the same run.
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 1Gi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+
+webapp:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+
+  # What the browser calls. Empty derives it from ingress.host, which is right
+  # whenever the UI and the API share a hostname — set it only when they do not.
+  apiBaseUrl: ""
+
+  # Sign-in for the UI (MSAL, browser-facing). Deliberately separate from the
+  # azure.* block above: that one is how the worker reads Azure, this one is who
+  # may open the portal. They can be different tenants.
+  azureAd:
+    tenantId: ""
+    clientId: ""
+
+# ── Application settings ────────────────────────────────────────────────────
+config:
+  # Workloads inside the AKS clusters, reported by the agent chart. Off unless an
+  # agent is installed: without one, every cluster would be reported as silent.
+  collectKubernetesWorkloads: false
+
+  # Registry contents. Needs AcrPull per registry; registries without it are
+  # reported as unread rather than empty.
+  collectAcrDataPlane: true
+
+  # Subscriptions collected in parallel. Measured: 14 subscriptions went from
+  # 50m to 17m at 3, with the heap at 147 MB.
+  subscriptionConcurrency: 5
+
+  # Anything else, mapped straight into the ConfigMap. Keys are ASP.NET
+  # configuration paths, e.g. Metrics__WindowDays: "7".
+  extra: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]

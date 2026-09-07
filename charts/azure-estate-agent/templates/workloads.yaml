@@ -1,0 +1,127 @@
+{{- if and (not .Values.portal.existingSecret) .Values.portal.apiKey }}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ printf "%s-key" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+type: Opaque
+stringData:
+  apiKey: {{ .Values.portal.apiKey | quote }}
+---
+{{- end }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "agent.cronJobName" . }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scan
+spec:
+  schedule: {{ .Values.scan.schedule | quote }}
+  {{- /*
+    Forbid, not Replace. A scan that is still running has already read most of the
+    cluster; starting a second one doubles the load on the API server to produce
+    the same answer.
+  */}}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: {{ .Values.scan.successfulJobsHistoryLimit }}
+  failedJobsHistoryLimit: {{ .Values.scan.failedJobsHistoryLimit }}
+  jobTemplate:
+    spec:
+      backoffLimit: {{ .Values.scan.backoffLimit }}
+      template:
+        metadata:
+          labels:
+            {{- include "agent.selectorLabels" . | nindent 12 }}
+            app.kubernetes.io/component: scan
+        spec:
+          serviceAccountName: {{ include "agent.scanServiceAccountName" . }}
+          restartPolicy: Never
+          {{- with .Values.image.pullSecrets }}
+          imagePullSecrets:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- toYaml .Values.podSecurityContext | nindent 12 }}
+          containers:
+            - name: agent
+              image: {{ include "agent.image" . }}
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              args: ["scan"]
+              securityContext:
+                {{- toYaml .Values.containerSecurityContext | nindent 16 }}
+              env:
+                {{- include "agent.env" . | nindent 16 }}
+              resources:
+                {{- toYaml .Values.scan.resources | nindent 16 }}
+          {{- with .Values.scan.nodeSelector }}
+          nodeSelector:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.scan.tolerations }}
+          tolerations:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.scan.affinity }}
+          affinity:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- if .Values.listener.enabled }}
+---
+{{/*
+  Always running, and reads nothing. It asks the portal whether a scan has been
+  requested and, when one has, instantiates the CronJob above — the same thing
+  `kubectl create job --from=cronjob/...` does, so it needs no pod template of its
+  own to keep in step.
+*/ -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-listener" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: listener
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "agent.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: listener
+  template:
+    metadata:
+      labels:
+        {{- include "agent.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: listener
+    spec:
+      serviceAccountName: {{ include "agent.listenerServiceAccountName" . }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: listener
+          image: {{ include "agent.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          args: ["listen"]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          env:
+            {{- include "agent.env" . | nindent 12 }}
+          resources:
+            {{- toYaml .Values.listener.resources | nindent 12 }}
+      {{- with .Values.listener.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.listener.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.listener.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

@@ -1,0 +1,122 @@
+# Azure Estate Portal — workload agent
+#
+# Runs inside an AKS cluster and pushes what it finds to the portal. The traffic
+# is outbound only, which is why a private API server does not matter: nothing
+# ever connects to this cluster from outside.
+#
+# Two workloads, deliberately not one. The scan job holds cluster-wide read and
+# is alive for seconds a day. The listener is alive always and can only create a
+# Job in its own namespace — it cannot read a single workload.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  repository: trimtechbr/azure-estate/k8s-agent
+  # Empty means the chart's appVersion. The payload is versioned, so an agent
+  # older than the portal is refused with a message naming both versions rather
+  # than parsed optimistically.
+  tag: ""
+  pullPolicy: IfNotPresent
+  # Needed while the package is private. Create the secret first, e.g.
+  #   kubectl create secret docker-registry ghcr --docker-server=ghcr.io \
+  #     --docker-username=<user> --docker-password=<PAT with read:packages>
+  pullSecrets: []
+  # - name: ghcr
+
+portal:
+  # Base URL of the portal API. This cluster must be able to reach it outbound.
+  url: ""
+
+  # The ARM resource id of THIS cluster. A cluster cannot know it from the
+  # inside, and the portal refuses a payload that names a different cluster than
+  # the key belongs to.
+  clusterId: ""
+
+  # Preferred: a secret you create, so the key never passes through
+  # `helm get values` or the release secret.
+  #   kubectl create secret generic estate-agent-key --from-literal=apiKey='<key>'
+  existingSecret: ""
+  existingSecretKey: apiKey
+
+  # Convenience. Generate the key in the portal under Kubernetes → Clusters; it
+  # is shown once, because only its hash is stored.
+  apiKey: ""
+
+  timeoutSeconds: 120
+
+scan:
+  # Daily. The portal treats a payload under 26 hours old as on schedule, which
+  # leaves room for one late run before anything is flagged.
+  schedule: "17 3 * * *"
+
+  # Pods included in a payload. Every count the portal shows is rolled up by the
+  # agent over all pods before this applies, so lowering it costs detail and
+  # never accuracy.
+  maxPods: 2000
+
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  backoffLimit: 2
+
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 512Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+listener:
+  # Answers "has a scan been requested?" by asking the portal. It exists because
+  # nothing outside a private cluster can reach in to start one. Turn it off and
+  # the scan only ever runs on its schedule.
+  enabled: true
+  pollSeconds: 60
+
+  resources:
+    requests:
+      cpu: 10m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+rbac:
+  create: true
+
+  # OPTIONAL, and read this before turning it on.
+  #
+  # Kubernetes RBAC has no metadata-only verb: granting `list` on Secrets grants
+  # reading their values. The agent asks the API server for PartialObjectMetadata
+  # so values are stripped before they reach it, and the portal has no field to
+  # store them in — but that is the agent behaving, not the cluster preventing.
+  #
+  # What it buys: finding Secrets that no workload uses.
+  # What you keep without it: which Secrets ARE used. That comes from pod specs
+  # and needs no permission on the Secrets at all.
+  secretMetadata: false
+
+serviceAccount:
+  create: true
+  scanName: ""
+  listenerName: ""
+  annotations: {}
+
+podSecurityContext:
+  runAsNonRoot: true
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]

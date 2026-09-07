@@ -1,0 +1,15 @@
+# Someone else's gateway publishes the portal, so the chart publishes nothing and
+# the browser-facing URL has to be stated.
+database:
+  existingSecret: estate-db
+azure:
+  workloadIdentity:
+    clientId: "11111111-1111-1111-1111-111111111111"
+ingress:
+  enabled: false
+webapp:
+  apiBaseUrl: https://estate.ci.example/
+config:
+  collectKubernetesWorkloads: true
+  extra:
+    Metrics__WindowDays: "14"

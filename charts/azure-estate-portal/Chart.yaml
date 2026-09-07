@@ -1,0 +1,41 @@
+apiVersion: v2
+name: azure-estate-portal
+description: Discovery, analysis and observability reporting for Azure environments — API, sync worker and web UI.
+type: application
+
+# The chart's own version, bumped for any change to the chart. appVersion tracks
+# the product, which releases on its own cadence.
+version: 0.1.0
+appVersion: "0.7.0"
+
+home: https://github.com/TrimTechBr/charts
+sources:
+  - https://github.com/TrimTechBr/charts
+keywords:
+  - azure
+  - inventory
+  - observability
+  - governance
+  - finops
+
+maintainers:
+  - name: TrimTechBR
+    url: https://github.com/TrimTechBr
+
+annotations:
+  # Standard chart metadata. Also what a chart index would read if this repository
+  # is ever listed publicly.
+  artifacthub.io/license: MIT
+  artifacthub.io/images: |
+    - name: api
+      image: ghcr.io/trimtechbr/azure-estate/api:0.7.0
+    - name: worker
+      image: ghcr.io/trimtechbr/azure-estate/worker:0.7.0
+    - name: webapp
+      image: ghcr.io/trimtechbr/azure-estate/webapp:0.7.0
+  artifacthub.io/links: |
+    - name: source
+      url: https://github.com/TrimTechBr/charts
+  artifacthub.io/changes: |
+    - kind: added
+      description: First release of the chart, replacing the raw manifests under deploy/aks

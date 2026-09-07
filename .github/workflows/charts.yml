@@ -1,0 +1,170 @@
+name: Charts
+
+# Lints and renders every chart on every change, and publishes to GHCR when a
+# chart's version is one the registry does not already have. Bumping the version
+# in Chart.yaml is what releases; there is no separate tag to remember.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'charts/**'
+      - '.github/workflows/charts.yml'
+  pull_request:
+    paths:
+      - 'charts/**'
+      - '.github/workflows/charts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  REGISTRY: ghcr.io
+  # Charts land beside the images they install, under the same org.
+  CHART_NAMESPACE: trimtechbr/charts
+
+jobs:
+  # ────────────────────────────────────────────────────────────────────────────
+  # Lint and render. Every chart is rendered with each of its ci/*-values.yaml
+  # files and the result validated against the Kubernetes schemas — which is the
+  # half `helm lint` does not do: lint parses YAML, kubeconform checks the fields
+  # actually exist.
+  # ────────────────────────────────────────────────────────────────────────────
+  validate:
+    name: Lint and render
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.19.0
+
+      - name: Install kubeconform
+        run: |
+          curl -sSfL https://github.com/yannh/kubeconform/releases/download/v0.8.0/kubeconform-linux-amd64.tar.gz \
+            | tar -xz -C /usr/local/bin kubeconform
+          kubeconform -v
+
+      - name: Lint
+        run: |
+          failed=0
+          for chart in charts/*/; do
+            name=$(basename "$chart")
+            for values in "$chart"ci/*-values.yaml; do
+              echo "::group::helm lint $name ($(basename "$values"))"
+              helm lint "$chart" --values "$values" || failed=1
+              echo "::endgroup::"
+            done
+          done
+          exit $failed
+
+      - name: Render and validate against the Kubernetes schemas
+        run: |
+          failed=0
+          for chart in charts/*/; do
+            name=$(basename "$chart")
+            for values in "$chart"ci/*-values.yaml; do
+              echo "::group::$name ($(basename "$values"))"
+              # --strict rejects fields that are not in the schema, which is what
+              # catches a typo in a field name — the failure mode that otherwise
+              # installs cleanly and does nothing.
+              helm template "$name" "$chart" --namespace estate --values "$values" \
+                | kubeconform -strict -summary -kubernetes-version 1.31.0 \
+                || failed=1
+              echo "::endgroup::"
+            done
+          done
+          exit $failed
+
+      # The guards exist to fail at render time rather than at run time. A guard
+      # that stopped firing would be invisible, so each one is asserted here.
+      - name: The refusals still refuse
+        run: |
+          expect_fail() {
+            desc="$1"; shift
+            if helm template t "$@" >/dev/null 2>&1; then
+              echo "::error::expected a refusal and got a render: $desc"
+              return 1
+            fi
+            echo "  refused as expected: $desc"
+          }
+          failed=0
+          P=charts/azure-estate-portal
+          A=charts/azure-estate-agent
+          expect_fail "portal without a database"        $P --set azure.workloadIdentity.clientId=c || failed=1
+          expect_fail "portal with both identity paths"  $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set azure.clientSecret.enabled=true --set azure.clientSecret.clientId=c --set azure.clientSecret.value=v || failed=1
+          expect_fail "portal with a second worker"      $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set worker.replicaCount=2 || failed=1
+          expect_fail "portal with no ingress and no URL" $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set ingress.enabled=false || failed=1
+          expect_fail "agent without a portal URL"       $A --set portal.clusterId=x --set portal.apiKey=k || failed=1
+          expect_fail "agent without a cluster id"       $A --set portal.url=https://e --set portal.apiKey=k || failed=1
+          expect_fail "agent without a key"              $A --set portal.url=https://e --set portal.clusterId=x || failed=1
+          exit $failed
+
+  # ────────────────────────────────────────────────────────────────────────────
+  # Publish. Only from main, and only a version the registry does not have:
+  # re-pushing an existing chart version would change what someone already
+  # installed under that number.
+  # ────────────────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish to GHCR
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: validate
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+
+    permissions:
+      contents: read
+      packages: write
+      # Keyless signing: the certificate is issued against this workflow's
+      # identity, so there is no key to store or rotate.
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v5
+        with:
+          version: v3.19.0
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v4
+
+      - name: Log in to GHCR
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" \
+            | helm registry login "$REGISTRY" --username "${{ github.actor }}" --password-stdin
+
+      - name: Package, push and sign
+        run: |
+          pushed=0
+          for chart in charts/*/; do
+            name=$(helm show chart "$chart" | awk '/^name:/ {print $2}')
+            version=$(helm show chart "$chart" | awk '/^version:/ {print $2}')
+            ref="$REGISTRY/$CHART_NAMESPACE/$name:$version"
+
+            if helm show chart "oci://$REGISTRY/$CHART_NAMESPACE/$name" --version "$version" >/dev/null 2>&1; then
+              echo "$name $version is already published — bump the version in Chart.yaml to release."
+              continue
+            fi
+
+            echo "::group::publishing $name $version"
+            helm package "$chart" --destination dist
+            # The digest is what cosign signs; a tag can be moved, a digest cannot.
+            digest=$(helm push "dist/$name-$version.tgz" "oci://$REGISTRY/$CHART_NAMESPACE" 2>&1 \
+              | awk '/Digest:/ {print $2}')
+            cosign sign --yes "$REGISTRY/$CHART_NAMESPACE/$name@$digest"
+            echo "signed $ref@$digest"
+            echo "::endgroup::"
+            pushed=1
+          done
+
+          if [ "$pushed" = "0" ]; then
+            echo "Nothing to publish." >> "$GITHUB_STEP_SUMMARY"
+          fi

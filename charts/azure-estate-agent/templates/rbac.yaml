@@ -1,0 +1,133 @@
+{{- include "agent.validate" . -}}
+{{- if .Values.serviceAccount.create }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agent.scanServiceAccountName" . }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: scan
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- if .Values.listener.enabled }}
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "agent.listenerServiceAccountName" . }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+    app.kubernetes.io/component: listener
+  {{- with .Values.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+{{- end }}
+{{- end }}
+{{- if .Values.rbac.create }}
+---
+{{/*
+  Read, and only read. Secrets are absent on purpose: Kubernetes RBAC has no
+  metadata-only verb, so listing them is reading their values. rbac.secretMetadata
+  adds that grant for anyone who wants orphan-secret detection and accepts the
+  trade.
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ printf "%s-read" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: [""]
+    resources:
+      - namespaces
+      - pods
+      - nodes
+      - services
+      - persistentvolumeclaims
+      - configmaps
+      - resourcequotas
+      - limitranges
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "statefulsets", "daemonsets", "replicasets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list"]
+  - apiGroups: ["policy"]
+    resources: ["poddisruptionbudgets"]
+    verbs: ["get", "list"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list"]
+  {{- /*
+    Absent when no metrics server is installed. The agent reports that the usage
+    columns are unavailable rather than reporting zero.
+  */}}
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  {{- if .Values.rbac.secretMetadata }}
+  # Reading Secret metadata means being able to read Secrets. See values.yaml.
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["list"]
+  {{- end }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ printf "%s-read" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ printf "%s-read" (include "agent.fullname" .) }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.scanServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- if .Values.listener.enabled }}
+---
+{{/*
+  The listener's entire authority: instantiate the scan CronJob in its own
+  namespace. This is the pod that is always running, and it can read nothing.
+*/ -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ printf "%s-listener" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+rules:
+  - apiGroups: ["batch"]
+    resources: ["cronjobs"]
+    verbs: ["get"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ printf "%s-listener" (include "agent.fullname" .) }}
+  labels:
+    {{- include "agent.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ printf "%s-listener" (include "agent.fullname" .) }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "agent.listenerServiceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}
+{{- end }}

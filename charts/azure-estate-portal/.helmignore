@@ -1,0 +1,12 @@
+.DS_Store
+.git/
+.gitignore
+*.swp
+*.tmp
+*.orig
+*.bak
+.project
+.idea/
+.vscode/
+# Rendered only by CI, never shipped inside the package.
+ci/

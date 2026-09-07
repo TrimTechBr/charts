@@ -1,0 +1,56 @@
+{{- if .Values.ingress.enabled }}
+{{- /*
+  One hostname, two backends. The UI and the API share an origin, so the browser
+  never makes a cross-origin request and there is no CORS configuration that can
+  be wrong.
+
+  This works without a rewrite because the API already serves everything it has
+  under /api — the paths below are the application's own, not a prefix stripped
+  on the way in.
+
+  The API paths come first. Most controllers match longest-prefix regardless, but
+  the ones that match in order would otherwise send /api to the UI.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "estate.fullname" . }}
+  labels:
+    {{- include "estate.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      {{- with .Values.ingress.tls.secretName }}
+      secretName: {{ . }}
+      {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          {{- range .Values.ingress.apiPaths }}
+          - path: {{ . | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-api" (include "estate.fullname" $) }}
+                port:
+                  name: http
+          {{- end }}
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-webapp" (include "estate.fullname" .) }}
+                port:
+                  name: http
+{{- end }}
