@@ -3,8 +3,8 @@ name: azure-estate-agent
 description: Reports Kubernetes workloads from inside an AKS cluster to an Azure Estate Portal. Outbound only — the portal never connects to the cluster.
 type: application
 
-version: 0.1.2
-appVersion: "0.7.1"
+version: 0.1.3
+appVersion: "0.7.2"
 
 home: https://github.com/TrimTechBr/charts
 sources:
@@ -24,11 +24,13 @@ annotations:
   artifacthub.io/license: MIT
   artifacthub.io/images: |
     - name: k8s-agent
-      image: ghcr.io/trimtechbr/azure-estate/k8s-agent:0.7.1
+      image: ghcr.io/trimtechbr/azure-estate/k8s-agent:0.7.2
   artifacthub.io/links: |
     - name: source
       url: https://github.com/TrimTechBr/charts
   artifacthub.io/changes: |
+    - kind: fixed
+      description: Agent 0.7.2, where a successful scan exits zero instead of being reported as a failed Job
     - kind: fixed
       description: runAsUser 10001 to match the fixed image, and a writable /tmp for a container whose root filesystem is read-only
     - kind: added
