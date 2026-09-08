@@ -124,6 +124,17 @@ webapp:
   affinity: {}
   podAnnotations: {}
 
+  # The web image is nginx, which starts as root to bind :80 and drops to its own
+  # worker user. So this pod cannot claim runAsNonRoot, and claiming it would stop
+  # the pod from starting at all rather than harden anything.
+  #
+  # Making it rootless means moving nginx to a port above 1024 and giving it
+  # writable cache and pid paths — worth doing, and not something to bundle into a
+  # security context.
+  podSecurityContext:
+    seccompProfile:
+      type: RuntimeDefault
+
   # What the browser calls. Empty derives it from ingress.host, which is right
   # whenever the UI and the API share a hostname — set it only when they do not.
   apiBaseUrl: ""
@@ -153,8 +164,14 @@ config:
   # configuration paths, e.g. Metrics__WindowDays: "7".
   extra: {}
 
+# Applies to the API and the worker. The uid is numeric because Kubernetes only
+# reads the image config and cannot resolve a user name — runAsNonRoot against an
+# image whose USER is a name is refused at admission, not at runtime. It matches
+# the uid baked into those images.
 podSecurityContext:
   runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
   seccompProfile:
     type: RuntimeDefault
 

@@ -31,7 +31,7 @@ spec:
         {{- toYaml . | nindent 8 }}
       {{- end }}
       securityContext:
-        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+        {{- toYaml .Values.webapp.podSecurityContext | nindent 8 }}
       containers:
         - name: webapp
           image: {{ include "estate.image" (dict "root" . "component" "webapp") }}

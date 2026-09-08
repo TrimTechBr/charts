@@ -110,8 +110,14 @@ serviceAccount:
   listenerName: ""
   annotations: {}
 
+# Numeric on purpose. Kubernetes only reads the image config and cannot resolve a
+# user name to a uid, so runAsNonRoot against an image whose USER is a name is
+# refused at admission with "image has non-numeric user". This matches the uid
+# baked into the agent image.
 podSecurityContext:
   runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
   seccompProfile:
     type: RuntimeDefault
 

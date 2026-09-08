@@ -55,6 +55,17 @@ spec:
                 {{- include "agent.env" . | nindent 16 }}
               resources:
                 {{- toYaml .Values.scan.resources | nindent 16 }}
+              volumeMounts:
+                - name: tmp
+                  mountPath: /tmp
+          volumes:
+            {{- /*
+              The root filesystem is read-only, and .NET still wants somewhere to write — its diagnostics socket
+              and the temporary files the runtime creates on start. Without this the
+              container starts and then fails on something unrelated-looking.
+            */}}
+            - name: tmp
+              emptyDir: {}
           {{- with .Values.scan.nodeSelector }}
           nodeSelector:
             {{- toYaml . | nindent 12 }}
@@ -112,6 +123,13 @@ spec:
             {{- include "agent.env" . | nindent 12 }}
           resources:
             {{- toYaml .Values.listener.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # See the CronJob above.
+        - name: tmp
+          emptyDir: {}
       {{- with .Values.listener.nodeSelector }}
       nodeSelector:
         {{- toYaml . | nindent 8 }}
