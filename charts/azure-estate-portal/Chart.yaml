@@ -5,8 +5,8 @@ type: application
 
 # The chart's own version, bumped for any change to the chart. appVersion tracks
 # the product, which releases on its own cadence.
-version: 0.1.1
-appVersion: "0.7.1"
+version: 0.1.2
+appVersion: "0.7.3"
 
 home: https://github.com/TrimTechBr/charts
 sources:
@@ -28,15 +28,17 @@ annotations:
   artifacthub.io/license: MIT
   artifacthub.io/images: |
     - name: api
-      image: ghcr.io/trimtechbr/azure-estate/api:0.7.1
+      image: ghcr.io/trimtechbr/azure-estate/api:0.7.3
     - name: worker
-      image: ghcr.io/trimtechbr/azure-estate/worker:0.7.1
+      image: ghcr.io/trimtechbr/azure-estate/worker:0.7.3
     - name: webapp
-      image: ghcr.io/trimtechbr/azure-estate/webapp:0.7.1
+      image: ghcr.io/trimtechbr/azure-estate/webapp:0.7.3
   artifacthub.io/links: |
     - name: source
       url: https://github.com/TrimTechBr/charts
   artifacthub.io/changes: |
+    - kind: security
+      description: All three pods now run as uid 10001 with runAsNonRoot, including the web pod, whose nginx moved to port 8080 and no longer needs root to start
     - kind: fixed
       description: The webapp pod no longer claims runAsNonRoot, which nginx cannot meet, and the API and worker pin the numeric uid the fixed images carry
     - kind: added
