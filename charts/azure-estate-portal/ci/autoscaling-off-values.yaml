@@ -3,10 +3,6 @@
 #
 database:
   connectionString: "Host=postgres;Database=estate;Username=estate;Password=ci-only"
-azure:
-  tenantId: "00000000-0000-0000-0000-000000000000"
-  workloadIdentity:
-    clientId: "11111111-1111-1111-1111-111111111111"
 ingress:
   host: estate.ci.example
   tls:
@@ -20,3 +16,9 @@ api:
 webapp:
   autoscaling:
     enabled: false
+
+worker:
+  azure:
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    workloadIdentity:
+      clientId: "11111111-1111-1111-1111-111111111111"

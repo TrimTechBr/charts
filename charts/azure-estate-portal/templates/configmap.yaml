@@ -7,7 +7,6 @@ metadata:
     {{- include "estate.labels" . | nindent 4 }}
 data:
   Database__Provider: "PostgreSQL"
-  Azure__TenantId: {{ .Values.azure.tenantId | quote }}
   Kubernetes__CollectWorkloads: {{ .Values.config.collectKubernetesWorkloads | quote }}
   Acr__CollectDataPlane: {{ .Values.config.collectAcrDataPlane | quote }}
   Sync__SubscriptionConcurrency: {{ .Values.config.subscriptionConcurrency | quote }}

@@ -2,9 +2,6 @@
 # Istio, Envoy Gateway or Azure Application Gateway for Containers would use.
 database:
   existingSecret: estate-db
-azure:
-  workloadIdentity:
-    clientId: "11111111-1111-1111-1111-111111111111"
 ingress:
   enabled: false
 httpRoute:
@@ -18,3 +15,8 @@ httpRoute:
   apiPaths:
     - /api
     - /swagger
+
+worker:
+  azure:
+    workloadIdentity:
+      clientId: "11111111-1111-1111-1111-111111111111"

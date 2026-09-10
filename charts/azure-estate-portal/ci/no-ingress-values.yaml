@@ -2,9 +2,6 @@
 # the browser-facing URL has to be stated.
 database:
   existingSecret: estate-db
-azure:
-  workloadIdentity:
-    clientId: "11111111-1111-1111-1111-111111111111"
 ingress:
   enabled: false
 webapp:
@@ -13,3 +10,8 @@ config:
   collectKubernetesWorkloads: true
   extra:
     Metrics__WindowDays: "14"
+
+worker:
+  azure:
+    workloadIdentity:
+      clientId: "11111111-1111-1111-1111-111111111111"

@@ -21,7 +21,6 @@ spec:
     metadata:
       labels:
         {{- include "estate.componentSelectorLabels" (dict "root" . "component" "api") | nindent 8 }}
-        {{- include "estate.backendPodLabels" . | nindent 8 }}
       annotations:
         {{- /*
           Restarts the pods when the settings change. Without it a helm upgrade
@@ -54,7 +53,7 @@ spec:
           env:
             - name: ASPNETCORE_URLS
               value: http://+:8080
-            {{- include "estate.backendEnv" . | nindent 12 }}
+            {{- include "estate.dbEnv" . | nindent 12 }}
             {{- with .Values.api.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

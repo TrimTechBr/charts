@@ -26,7 +26,7 @@ spec:
     metadata:
       labels:
         {{- include "estate.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 8 }}
-        {{- include "estate.backendPodLabels" . | nindent 8 }}
+        {{- include "estate.workerPodLabels" . | nindent 8 }}
       annotations:
         checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
         {{- with .Values.worker.podAnnotations }}
@@ -50,7 +50,8 @@ spec:
             - configMapRef:
                 name: {{ include "estate.fullname" . }}
           env:
-            {{- include "estate.backendEnv" . | nindent 12 }}
+            {{- include "estate.dbEnv" . | nindent 12 }}
+            {{- include "estate.azureEnv" . | nindent 12 }}
             {{- with .Values.worker.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

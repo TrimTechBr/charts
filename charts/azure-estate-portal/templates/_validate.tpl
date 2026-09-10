@@ -16,19 +16,19 @@ level would never run.
 {{- fail "\n\nA PostgreSQL connection string is required.\n\n  Preferred -- a secret you manage:\n    kubectl create secret generic estate-db --from-literal=connectionString='Host=...;Database=...;Username=...;Password=...'\n    --set database.existingSecret=estate-db\n\n  Or, for a first install:\n    --set database.connectionString='Host=...;Database=...;Username=...;Password=...'\n\nSQLite is not an option here: the API and the worker are separate deployments\nthat both write, and a file database corrupts under two writers.\n" -}}
 {{- end -}}
 
-{{- if and .Values.azure.workloadIdentity.enabled .Values.azure.clientSecret.enabled -}}
+{{- if and .Values.worker.azure.workloadIdentity.enabled .Values.worker.azure.clientSecret.enabled -}}
 {{- fail "\n\nazure.workloadIdentity.enabled and azure.clientSecret.enabled are both on.\n\nDefaultAzureCredential reads the environment before it tries workload identity,\nso the client secret would silently win and the federated identity would never\nbe used. Pick one.\n" -}}
 {{- end -}}
 
-{{- if and .Values.azure.workloadIdentity.enabled (not .Values.azure.workloadIdentity.clientId) -}}
+{{- if and .Values.worker.azure.workloadIdentity.enabled (not .Values.worker.azure.workloadIdentity.clientId) -}}
 {{- fail "\n\nazure.workloadIdentity.clientId is required when workload identity is enabled.\n\nIt is the client id of the user-assigned managed identity whose federated\ncredential names this cluster's OIDC issuer and this service account. Set\nazure.workloadIdentity.enabled=false to use a client secret instead.\n" -}}
 {{- end -}}
 
-{{- if .Values.azure.clientSecret.enabled -}}
-{{- if not .Values.azure.clientSecret.clientId -}}
+{{- if .Values.worker.azure.clientSecret.enabled -}}
+{{- if not .Values.worker.azure.clientSecret.clientId -}}
 {{- fail "azure.clientSecret.clientId is required when azure.clientSecret.enabled is true." -}}
 {{- end -}}
-{{- if and (not .Values.azure.clientSecret.existingSecret) (not .Values.azure.clientSecret.value) -}}
+{{- if and (not .Values.worker.azure.clientSecret.existingSecret) (not .Values.worker.azure.clientSecret.value) -}}
 {{- fail "azure.clientSecret needs either existingSecret or value when enabled." -}}
 {{- end -}}
 {{- end -}}
@@ -55,6 +55,16 @@ level would never run.
 
 {{- if and (not .Values.ingress.enabled) (not .Values.httpRoute.enabled) (not .Values.webapp.apiBaseUrl) -}}
 {{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach -- a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
+{{- end -}}
+
+{{/*
+  The azure block moved under worker:, because the worker is the only component
+  that talks to Azure. Refused unconditionally, unlike the serviceAccount move:
+  ignoring this one leaves the worker with no identity and every sync failing on
+  its first call, which is a worse thing to discover later than a failed upgrade.
+*/}}
+{{- if .Values.azure -}}
+{{- fail "\n\nThe top-level azure block moved under worker:\n\n  worker:\n    azure:\n      tenantId: ...\n      workloadIdentity:\n        clientId: ...\n\nThe worker is the only component that reaches Azure -- the API reads the database\nand does not reference the project that speaks ARM. It no longer gets an identity,\nso the federated credential for its service account can go.\n" -}}
 {{- end -}}
 
 {{- $legacySA := .Values.serviceAccount | default dict -}}

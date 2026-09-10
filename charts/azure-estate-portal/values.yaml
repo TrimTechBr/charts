@@ -35,29 +35,6 @@ database:
   # is readable with `helm get values`, so prefer existingSecret in production.
   connectionString: ""
 
-# -- Azure identity ----------------------------------------------------------
-# What the worker uses to read the estate. Needs Reader + Monitoring Reader on
-# the subscriptions or management groups in scope, and AcrPull per registry to
-# inventory container images.
-azure:
-  tenantId: ""
-
-  # On AKS with the OIDC issuer enabled. Nothing is stored: the token is projected
-  # into the pod.
-  workloadIdentity:
-    enabled: true
-    clientId: ""
-
-  # For a cluster that is not AKS. DefaultAzureCredential reads these three
-  # variables directly, so this needs no change in the application.
-  clientSecret:
-    enabled: false
-    clientId: ""
-    existingSecret: ""
-    existingSecretKey: clientSecret
-    # Same caveat as database.connectionString.
-    value: ""
-
 # -- Ingress -----------------------------------------------------------------
 ingress:
   enabled: true
@@ -175,6 +152,30 @@ worker:
   # Its own account, named <release>-azure-estate-portal-worker. There is no name
   # override: the name has to match the federated credential's subject, and a
   # rename is a change on the Azure side too, not a value to flip here.
+  # Azure identity, here rather than at the top level because the worker is the
+  # only component that talks to Azure. The API reads the database and nothing
+  # else -- it does not even reference the project that speaks ARM.
+  #
+  # Reader and Monitoring Reader on the subscriptions or management groups in
+  # scope, and AcrPull per registry to inventory container images.
+  # What the worker uses to read the estate. Needs Reader + Monitoring Reader on
+  azure:
+    tenantId: ""
+    # On AKS with the OIDC issuer enabled. Nothing is stored: the token is projected
+    # into the pod.
+    workloadIdentity:
+      enabled: true
+      clientId: ""
+    # For a cluster that is not AKS. DefaultAzureCredential reads these three
+    # variables directly, so this needs no change in the application.
+    clientSecret:
+      enabled: false
+      clientId: ""
+      existingSecret: ""
+      existingSecretKey: clientSecret
+      # Same caveat as database.connectionString.
+      value: ""
+
   serviceAccount:
     create: true
     annotations: {}

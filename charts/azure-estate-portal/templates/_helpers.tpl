@@ -90,16 +90,16 @@ connectionString
 {{- end -}}
 
 {{- define "estate.clientSecretName" -}}
-{{- if .Values.azure.clientSecret.existingSecret -}}
-{{- .Values.azure.clientSecret.existingSecret -}}
+{{- if .Values.worker.azure.clientSecret.existingSecret -}}
+{{- .Values.worker.azure.clientSecret.existingSecret -}}
 {{- else -}}
 {{- printf "%s-azure" (include "estate.fullname" .) -}}
 {{- end -}}
 {{- end -}}
 
 {{- define "estate.clientSecretKey" -}}
-{{- if .Values.azure.clientSecret.existingSecret -}}
-{{- .Values.azure.clientSecret.existingSecretKey -}}
+{{- if .Values.worker.azure.clientSecret.existingSecret -}}
+{{- .Values.worker.azure.clientSecret.existingSecretKey -}}
 {{- else -}}
 clientSecret
 {{- end -}}
@@ -130,23 +130,32 @@ right whenever the UI and the API share a hostname.
 {{- end -}}
 
 {{/*
-The environment both the API and the worker need to reach the database and Azure.
+The database, which the API and the worker both read.
 */}}
-{{- define "estate.backendEnv" -}}
+{{- define "estate.dbEnv" -}}
 - name: ConnectionStrings__EstateDb
   valueFrom:
     secretKeyRef:
       name: {{ include "estate.dbSecretName" . }}
       key: {{ include "estate.dbSecretKey" . }}
-{{- if .Values.azure.clientSecret.enabled }}
+{{- end -}}
+
+{{/*
+Azure, which only the worker reads. The API does not reference the project that
+speaks ARM, so an identity on it is a credential mounted where nothing can use it.
+*/}}
+{{- define "estate.azureEnv" -}}
+- name: Azure__TenantId
+  value: {{ .Values.worker.azure.tenantId | quote }}
+{{- if .Values.worker.azure.clientSecret.enabled }}
 {{/*
 DefaultAzureCredential reads these three before it tries workload identity, so
 setting them is the whole of the non-AKS path -- no application change.
 */}}
 - name: AZURE_TENANT_ID
-  value: {{ .Values.azure.tenantId | quote }}
+  value: {{ .Values.worker.azure.tenantId | quote }}
 - name: AZURE_CLIENT_ID
-  value: {{ .Values.azure.clientSecret.clientId | quote }}
+  value: {{ .Values.worker.azure.clientSecret.clientId | quote }}
 - name: AZURE_CLIENT_SECRET
   valueFrom:
     secretKeyRef:
@@ -156,10 +165,11 @@ setting them is the whole of the non-AKS path -- no application change.
 {{- end -}}
 
 {{/*
-Pod labels. Workload identity is opted into per pod, not per namespace.
+Workload identity is opted into per pod, not per namespace -- and only on the pod
+that uses it.
 */}}
-{{- define "estate.backendPodLabels" -}}
-{{- if .Values.azure.workloadIdentity.enabled }}
+{{- define "estate.workerPodLabels" -}}
+{{- if .Values.worker.azure.workloadIdentity.enabled }}
 azure.workload.identity/use: "true"
 {{- end }}
 {{- end -}}

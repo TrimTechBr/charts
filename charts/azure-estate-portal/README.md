@@ -30,8 +30,8 @@ kubectl -n estate create secret generic estate-db \
 helm install estate oci://ghcr.io/trimtechbr/charts/azure-estate-portal \
   --namespace estate \
   --set database.existingSecret=estate-db \
-  --set azure.tenantId=<tenant> \
-  --set azure.workloadIdentity.clientId=<managed identity client id> \
+  --set worker.azure.tenantId=<tenant> \
+  --set worker.azure.workloadIdentity.clientId=<managed identity client id> \
   --set ingress.host=estate.example.com \
   --set ingress.tls.enabled=true
 ```
@@ -128,33 +128,39 @@ Two paths, and the chart refuses both at once -- `DefaultAzureCredential` reads
 the environment before it tries workload identity, so a client secret would
 silently win and the federated credential would never be used.
 
-**On AKS** (default). The managed identity needs a federated credential naming
-this cluster's OIDC issuer and this service account:
+It lives under `worker:` because the worker is the only component that reaches
+Azure. The API serves the database and does not reference the project that speaks
+ARM, so it gets no identity: no annotation, no projected token, and on the client
+secret path, no secret mounted where nothing can read it.
+
+**On AKS** (default). The managed identity needs one federated credential, naming
+this cluster's OIDC issuer and the worker's service account:
 
 ```
-system:serviceaccount:<namespace>:<release>-azure-estate-portal-api
 system:serviceaccount:<namespace>:<release>-azure-estate-portal-worker
 ```
 
 ```yaml
-azure:
-  tenantId: <tenant>
-  workloadIdentity:
-    enabled: true
-    clientId: <managed identity client id>
+worker:
+  azure:
+    tenantId: <tenant>
+    workloadIdentity:
+      enabled: true
+      clientId: <managed identity client id>
 ```
 
 **Anywhere else.** A service principal, read straight from the environment:
 
 ```yaml
-azure:
-  tenantId: <tenant>
-  workloadIdentity:
-    enabled: false
-  clientSecret:
-    enabled: true
-    clientId: <app registration client id>
-    existingSecret: estate-azure     # key: clientSecret
+worker:
+  azure:
+    tenantId: <tenant>
+    workloadIdentity:
+      enabled: false
+    clientSecret:
+      enabled: true
+      clientId: <app registration client id>
+      existingSecret: estate-azure     # key: clientSecret
 ```
 
 ## Values worth knowing
@@ -163,13 +169,13 @@ azure:
 |---|---|---|
 | `database.existingSecret` | `""` | Preferred. A secret you manage, so the connection string never reaches `helm get values`. |
 | `database.connectionString` | `""` | Inline alternative. Stored in the release. |
-| `azure.workloadIdentity.clientId` | `""` | Required on AKS. |
+| `worker.azure.workloadIdentity.clientId` | `""` | Required on AKS. Only the worker reaches Azure. |
 | `ingress.host` | `estate.example.com` | Required unless the ingress is disabled. |
 | `httpRoute.enabled` | `false` | Gateway API instead of, or alongside, the ingress. |
 | `httpRoute.parentRefs[0].name` | `""` | Required when enabled -- the Gateway to attach to. |
 | `ingress.apiPaths` | `[/api]` | What the API serves through the ingress. |
 | `webapp.apiBaseUrl` | derived | What the browser calls. Only set it when the UI and API are on different hosts. |
-| `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `azure.*`, which is how the worker reads Azure -- possibly a different tenant. |
+| `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `worker.azure.*`, which is how the worker reads Azure -- possibly a different tenant. |
 | `config.collectKubernetesWorkloads` | `false` | Needs the agent chart installed in each cluster. |
 | `config.collectAcrDataPlane` | `true` | Registry contents. Needs `AcrPull` per registry. |
 | `config.extra` | `{}` | Any other setting, as ASP.NET configuration keys: `Metrics__WindowDays: "14"`. |
@@ -204,7 +210,7 @@ One per Deployment: `<release>-azure-estate-portal-api`, `-worker` and `-webapp`
 
 A federated credential binds to a single namespace/serviceaccount subject, so a
 shared account means all three authenticate as the same Azure identity and none
-can be revoked without the others. The UI gets an account with no Azure
+can be revoked without the others -- and only one of them has any use for it. The UI gets an account with no Azure
 annotations at all, which is what it should have: it is a static bundle served by
 nginx and never calls Azure. Before this it ran as the namespace `default`
 account, which is whatever anyone else has attached to it.
@@ -220,11 +226,11 @@ worker:
       team: platform
 ```
 
-The API and the worker each carry `azure.workload.identity/client-id` and, when
-`azure.tenantId` is set, `tenant-id`. The tenant annotation is omitted rather than
-written empty: without it the webhook falls back to the tenant the cluster's
-workload identity add-on was installed with, which is right up until the identity
-lives in a different tenant.
+Only the worker's account carries `azure.workload.identity/client-id` and, when
+`worker.azure.tenantId` is set, `tenant-id`. The tenant annotation is omitted
+rather than written empty: without it the webhook falls back to the tenant the
+cluster's workload identity add-on was installed with, which is right up until the
+identity lives in a different tenant.
 
 **Your annotations are merged over the chart's, so they win.** That is how a
 component gets its own managed identity -- no separate setting for it:
@@ -239,10 +245,11 @@ worker:
 Merged rather than printed one block after the other, which would emit the same
 key twice and leave it to whichever parser reads the manifest to decide.
 
-> **Coming from a chart before 0.2.3, create the federated credentials first.**
-> The account names are new, so the credential pointing at the old shared
-> `<release>-azure-estate-portal` matches nothing and both components fail their
-> first Azure call. One credential covers one subject, so both are needed.
+> **Coming from a chart before 0.2.5, create the federated credential first.**
+> The subject is new, so a credential pointing at the old shared
+> `<release>-azure-estate-portal` matches nothing and every sync fails on its first
+> Azure call. Only the worker's subject is needed now; a credential for the API's
+> account can be deleted.
 
 ## Disruption budgets
 
