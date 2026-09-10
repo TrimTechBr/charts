@@ -43,11 +43,19 @@ Per-component selector. Takes a dict with "root" and "component".
 app.kubernetes.io/component: {{ .component }}
 {{- end -}}
 
+{{/*
+Per-component account name. Takes a dict with "root" and "component".
+
+There is no name override any more: with three accounts a single name cannot say
+which one it means, and a setting that cannot express the thing it configures is
+worse than none. serviceAccount.create false falls back to the namespace default
+for every component.
+*/}}
 {{- define "estate.serviceAccountName" -}}
-{{- if .Values.serviceAccount.create -}}
-{{- default (include "estate.fullname" .) .Values.serviceAccount.name -}}
+{{- if .root.Values.serviceAccount.create -}}
+{{- printf "%s-%s" (include "estate.fullname" .root) .component -}}
 {{- else -}}
-{{- default "default" .Values.serviceAccount.name -}}
+default
 {{- end -}}
 {{- end -}}
 

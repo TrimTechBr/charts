@@ -27,13 +27,18 @@ Check it came up:
     kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-worker" (include "estate.fullname" .) }}
 
 {{ if .Values.azure.workloadIdentity.enabled -}}
-Azure access uses workload identity. The managed identity {{ .Values.azure.workloadIdentity.clientId }}
-needs a federated credential naming this cluster's OIDC issuer and this service
-account:
+Azure access uses workload identity. The API and the worker have one service
+account each, so the managed identity {{ .Values.azure.workloadIdentity.clientId }}
+needs a federated credential for BOTH subjects -- one credential covers one
+subject, and the component whose subject is missing fails its first Azure call:
 
-    system:serviceaccount:{{ .Release.Namespace }}:{{ include "estate.serviceAccountName" . }}
+    system:serviceaccount:{{ .Release.Namespace }}:{{ include "estate.serviceAccountName" (dict "root" . "component" "api") }}
+    system:serviceaccount:{{ .Release.Namespace }}:{{ include "estate.serviceAccountName" (dict "root" . "component" "worker") }}
 
-and, on the subscriptions in scope, the Reader and Monitoring Reader roles.
+Upgrading from a chart before 0.2.3? These names are new. The old shared account
+was {{ include "estate.fullname" . }}, and its credential no longer matches anything.
+
+The identity also needs Reader and Monitoring Reader on the subscriptions in scope.
 {{- else if .Values.azure.clientSecret.enabled -}}
 Azure access uses a client secret. The service principal {{ .Values.azure.clientSecret.clientId }}
 needs Reader and Monitoring Reader on the subscriptions in scope.

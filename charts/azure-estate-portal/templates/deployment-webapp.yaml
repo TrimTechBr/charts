@@ -33,6 +33,12 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
+      {{- /*
+        Its own account, with no Azure annotations on it. The UI is a static bundle
+        served by nginx and never calls Azure -- it was running as the namespace
+        default account, which is whatever anyone else has attached to it.
+      */}}
+      serviceAccountName: {{ include "estate.serviceAccountName" (dict "root" . "component" "webapp") }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

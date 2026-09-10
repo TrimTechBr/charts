@@ -6,7 +6,12 @@ metadata:
     {{- include "estate.labels" . | nindent 4 }}
     app.kubernetes.io/component: worker
 spec:
-  replicas: {{ .Values.worker.replicaCount }}
+  {{- /*
+    One, and not configurable. A value whose only valid setting is 1 is not
+    configuration -- it is a number that reads like a choice and answers to
+    nothing.
+  */}}
+  replicas: 1
   {{- /*
     Recreate, not RollingUpdate. A sync run is claimed from a database queue and
     takes tens of minutes; two workers alive at once during a rollout would both
@@ -28,7 +33,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "estate.serviceAccountName" . }}
+      serviceAccountName: {{ include "estate.serviceAccountName" (dict "root" . "component" "worker") }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

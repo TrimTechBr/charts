@@ -57,6 +57,15 @@ level would never run.
 {{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach -- a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
 {{- end -}}
 
+{{/*
+  serviceAccount.name is gone: there are three accounts now, and one name cannot
+  say which it means. Refused rather than ignored -- a name that is quietly
+  dropped is one you believe you set.
+*/}}
+{{- if .Values.serviceAccount.name -}}
+{{- fail "\n\nserviceAccount.name no longer exists.\n\nEach Deployment now has its own account, named after the release and the\ncomponent: <release>-azure-estate-portal-{api,worker,webapp}. Remove the\nsetting; use serviceAccount.annotations for anything you were attaching.\n" -}}
+{{- end -}}
+
 {{- range $component := list "api" "webapp" -}}
 {{- $a := (index $.Values $component).autoscaling -}}
 {{- if $a.enabled -}}
@@ -72,6 +81,30 @@ level would never run.
 {{- fail (printf "\n\n%s.autoscaling is on but %s.resources.requests.cpu is not set.\n\nA CPU target is a percentage of the request, so with no request there is nothing\nto take a percentage of. The autoscaler reports <unknown>/%d%% and never scales.\n\nSet the request, or %s.autoscaling.enabled=false.\n" $component $component (int $a.targetCPUUtilizationPercentage) $component) -}}
 {{- end -}}
 {{- end -}}
+{{/*
+  A budget that permits no disruption at all does not protect the component, it
+  pins it: the drain waits forever, and the node upgrade hangs until someone
+  finds the PDB and deletes it by hand. Percentages are handled here too, since
+  "0%" and "100%" pin it just as thoroughly as the integers do.
+*/}}
+{{- $pdb := (index $.Values $component).pdb -}}
+{{- if $pdb.enabled -}}
+{{- if $pdb.minAvailable -}}
+{{- $m := toString $pdb.minAvailable -}}
+{{- if hasSuffix "%" $m -}}
+{{- if ge (int (trimSuffix "%" $m)) 100 -}}
+{{- fail (printf "\n\n%s.pdb.minAvailable is 100%% or more, so no pod may ever be evicted.\n\nA node drain then blocks indefinitely and a cluster upgrade hangs on it, which\nsurfaces as a stuck node rather than as a disruption budget.\n" $component) -}}
+{{- end -}}
+{{- else -}}
+{{- $floor := ternary (int $a.minReplicas) (int (index $.Values $component).replicaCount) $a.enabled -}}
+{{- if ge (int $m) $floor -}}
+{{- fail (printf "\n\n%s.pdb.minAvailable is at or above the replica floor, so no pod may be evicted.\n\nAt the floor every pod is needed to satisfy the budget, so a node drain blocks\nindefinitely and a cluster upgrade hangs on it. Lower minAvailable, raise the\nfloor, or use maxUnavailable instead.\n" $component) -}}
+{{- end -}}
+{{- end -}}
+{{- else if le (int (trimSuffix "%" (toString $pdb.maxUnavailable))) 0 -}}
+{{- fail (printf "\n\n%s.pdb.maxUnavailable is 0, so no pod may ever be evicted.\n\nA node drain then blocks indefinitely and a cluster upgrade hangs on it. Set it\nto 1, or turn the budget off.\n" $component) -}}
+{{- end -}}
+{{- end -}}
 {{- end -}}
 
 {{/*
@@ -82,7 +115,13 @@ level would never run.
 {{- fail "\n\nThe worker cannot be autoscaled.\n\nIt claims sync runs from a queue in the database, so a second replica races the\nfirst for the same run and collects the same estate twice. A sync also pegs the\nCPU, so load is the one signal certain to scale it up at the worst moment.\n\nScale the API instead -- it serves the UI and is what a busy portal is short of.\n" -}}
 {{- end -}}
 
-{{- if gt (int .Values.worker.replicaCount) 1 -}}
-{{- fail "\n\nworker.replicaCount must be 1.\n\nThe worker claims sync runs from a queue in the database. A second replica races\nfor the same run and both collect the same estate twice.\n" -}}
+{{/*
+  worker.replicaCount is gone from values.yaml, but a --reuse-values upgrade still
+  carries the old key, and someone may pass it out of habit. Defaulted so that its
+  absence is not a refusal, and still refused above 1 rather than quietly ignored:
+  being ignored is how you end up believing you scaled something.
+*/}}
+{{- if gt (int (.Values.worker.replicaCount | default 1)) 1 -}}
+{{- fail "\n\nThe worker runs one replica, and that is not configurable.\n\nIt claims sync runs from a queue in the database, so a second replica races the\nfirst for the same run and both collect the same estate twice. The Deployment\nhardcodes 1; remove worker.replicaCount.\n" -}}
 {{- end -}}
 {{- end -}}

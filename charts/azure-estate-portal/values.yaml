@@ -58,9 +58,12 @@ azure:
     # Same caveat as database.connectionString.
     value: ""
 
+# One account per Deployment, named <release>-azure-estate-portal-{api,worker,webapp}.
+# No name override: with three accounts a single name cannot say which one it means.
 serviceAccount:
   create: true
-  name: ""
+  # Applied to all three. The Azure workload identity annotations are added on top,
+  # to the API and the worker only -- the UI never calls Azure.
   annotations: {}
 
 # -- Ingress -----------------------------------------------------------------
@@ -134,6 +137,20 @@ api:
     # toward the limit and does not hand it back, so memory reads as permanently
     # high and the autoscaler ratchets up and never comes down.
     targetMemoryUtilizationPercentage: ""
+
+  # Bounds voluntary disruption only -- a node drain, a cluster upgrade, the node
+  # autoscaler compacting nodes. Nothing here helps when a node simply dies; that
+  # is what having replicas is for.
+  pdb:
+    enabled: true
+    # One pod out at a time. Preferred over minAvailable while an autoscaler is in
+    # play: minAvailable is a floor, so at 6 replicas "minAvailable: 1" would let a
+    # drain take five pods at once.
+    maxUnavailable: 1
+    # A floor instead of a step, if you would rather. Accepts a percentage ("50%").
+    # Wins over maxUnavailable when both are set, because the API rejects an object
+    # carrying both.
+    minAvailable: ""
   resources:
     requests:
       cpu: 100m
@@ -147,12 +164,11 @@ api:
   extraEnv: []
 
 worker:
-  # One, and there is no autoscaling block for the worker on purpose. The sync
-  # claims runs from a queue in the database, so a second replica races the first
-  # for the same run and collects the same estate twice. An autoscaler would do
-  # that on its own, and a sync pegs the CPU -- load is the one signal certain to
-  # trigger it at the worst possible moment.
-  replicaCount: 1
+  # No replicaCount, no autoscaling and no pdb block, on purpose. The worker claims sync
+  # runs from a queue in the database, so a second replica races the first for the
+  # same run and collects the same estate twice. One is the only working answer,
+  # the Deployment hardcodes it, and a setting that accepts a single value is not
+  # a setting.
   resources:
     requests:
       cpu: 100m
@@ -174,6 +190,11 @@ webapp:
     maxReplicas: 4
     targetCPUUtilizationPercentage: 70
     targetMemoryUtilizationPercentage: ""
+
+  pdb:
+    enabled: true
+    maxUnavailable: 1
+    minAvailable: ""
   resources:
     requests:
       cpu: 50m

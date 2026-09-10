@@ -32,7 +32,7 @@ spec:
         {{- toYaml . | nindent 8 }}
         {{- end }}
     spec:
-      serviceAccountName: {{ include "estate.serviceAccountName" . }}
+      serviceAccountName: {{ include "estate.serviceAccountName" (dict "root" . "component" "api") }}
       {{- with .Values.image.pullSecrets }}
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}

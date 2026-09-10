@@ -132,7 +132,8 @@ silently win and the federated credential would never be used.
 this cluster's OIDC issuer and this service account:
 
 ```
-system:serviceaccount:<namespace>:<release>-azure-estate-portal
+system:serviceaccount:<namespace>:<release>-azure-estate-portal-api
+system:serviceaccount:<namespace>:<release>-azure-estate-portal-worker
 ```
 
 ```yaml
@@ -175,7 +176,8 @@ azure:
 | `image.pullSecrets` | `[]` | Required while the packages are private. |
 | `api.autoscaling.enabled` | `true` | HPA on CPU, 2 to 6 replicas. Needs metrics-server. |
 | `webapp.autoscaling.enabled` | `true` | HPA on CPU, 2 to 4 replicas. |
-| `worker.replicaCount` | `1` | Fixed at one, and not autoscalable. A second worker races the first for the same queued run. |
+| `api.pdb.maxUnavailable` | `1` | One pod out at a time during a drain. `minAvailable` instead, if you want a floor. |
+| `serviceAccount.create` | `true` | One account per Deployment. There is no name override. |
 
 ## What the chart refuses
 
@@ -190,8 +192,45 @@ watching the terminal:
   every hostname its Gateway serves, which would put the portal on hostnames meant
   for other applications
 - more than one worker replica, or any attempt to autoscale it
+- a disruption budget that permits no disruption at all
+- `serviceAccount.name`, which no longer exists
 - an autoscaler on a component whose CPU request was removed, or with minReplicas
   above maxReplicas
+
+## Service accounts
+
+One per Deployment: `<release>-azure-estate-portal-api`, `-worker` and `-webapp`.
+
+A federated credential binds to a single namespace/serviceaccount subject, so a
+shared account means all three authenticate as the same Azure identity and none
+can be revoked without the others. The UI gets an account with no Azure
+annotations at all, which is what it should have: it is a static bundle served by
+nginx and never calls Azure. Before this it ran as the namespace `default`
+account, which is whatever anyone else has attached to it.
+
+The API and the worker each carry `azure.workload.identity/client-id` and, when
+`azure.tenantId` is set, `tenant-id`. The tenant annotation is omitted rather than
+written empty: without it the webhook falls back to the tenant the cluster's
+workload identity add-on was installed with, which is right up until the identity
+lives in a different tenant.
+
+> **Coming from a chart before 0.2.3, create the federated credentials first.**
+> The account names are new, so the credential pointing at the old shared
+> `<release>-azure-estate-portal` matches nothing and both components fail their
+> first Azure call. One credential covers one subject, so both are needed.
+
+## Disruption budgets
+
+`api` and `webapp` each get one, allowing one pod out at a time. It bounds
+voluntary disruption -- a node drain, a cluster upgrade, the node autoscaler
+compacting nodes -- and does nothing for a node that simply dies, which is what
+replicas are for.
+
+The worker has none, deliberately: it runs one replica, and a budget demanding one
+available pod on a one-pod Deployment permits no disruption at all. The drain
+blocks and the node upgrade hangs until someone finds the PDB and deletes it. The
+chart refuses that shape for the other two as well -- `maxUnavailable: 0`, or a
+`minAvailable` at or above the replica floor.
 
 ## Upgrading
 

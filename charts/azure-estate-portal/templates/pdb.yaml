@@ -1,0 +1,35 @@
+{{/*
+  Disruption budgets for the two components that run more than one replica.
+
+  These bound voluntary disruption only -- a node drain, a cluster upgrade, the
+  autoscaler compacting nodes. They do nothing for a node that simply dies, which
+  is what replicas are for.
+
+  The worker has none, deliberately. It runs exactly one replica, and a budget
+  demanding one available pod on a one-pod Deployment permits no disruption at all:
+  the drain blocks, waits, and the node upgrade hangs until someone deletes the PDB
+  by hand. A worker that is briefly down is not an outage -- the run it was holding
+  is claimed again on the next poll.
+*/}}
+{{- range $component := list "api" "webapp" }}
+{{- $cfg := index $.Values $component }}
+{{- if $cfg.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ printf "%s-%s" (include "estate.fullname" $) $component }}
+  labels:
+    {{- include "estate.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  {{- if $cfg.pdb.minAvailable }}
+  minAvailable: {{ $cfg.pdb.minAvailable }}
+  {{- else }}
+  maxUnavailable: {{ $cfg.pdb.maxUnavailable }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "estate.componentSelectorLabels" (dict "root" $ "component" $component) | nindent 6 }}
+{{- end }}
+{{- end }}
