@@ -52,7 +52,7 @@ worse than none. serviceAccount.create false falls back to the namespace default
 for every component.
 */}}
 {{- define "estate.serviceAccountName" -}}
-{{- if .root.Values.serviceAccount.create -}}
+{{- if (index .root.Values .component).serviceAccount.create -}}
 {{- printf "%s-%s" (include "estate.fullname" .root) .component -}}
 {{- else -}}
 default

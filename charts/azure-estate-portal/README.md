@@ -177,7 +177,8 @@ azure:
 | `api.autoscaling.enabled` | `true` | HPA on CPU, 2 to 6 replicas. Needs metrics-server. |
 | `webapp.autoscaling.enabled` | `true` | HPA on CPU, 2 to 4 replicas. |
 | `api.pdb.maxUnavailable` | `1` | One pod out at a time during a drain. `minAvailable` instead, if you want a floor. |
-| `serviceAccount.create` | `true` | One account per Deployment. There is no name override. |
+| `api.serviceAccount.annotations` | `{}` | Per component, and merged over what the chart writes -- so a `client-id` set here wins. |
+| `api.serviceAccount.create` | `true` | Same under `worker` and `webapp`. No name override. |
 
 ## What the chart refuses
 
@@ -193,7 +194,7 @@ watching the terminal:
   for other applications
 - more than one worker replica, or any attempt to autoscale it
 - a disruption budget that permits no disruption at all
-- `serviceAccount.name`, which no longer exists
+- the shared `serviceAccount` block, which moved into the component blocks
 - an autoscaler on a component whose CPU request was removed, or with minReplicas
   above maxReplicas
 
@@ -208,11 +209,35 @@ annotations at all, which is what it should have: it is a static bundle served b
 nginx and never calls Azure. Before this it ran as the namespace `default`
 account, which is whatever anyone else has attached to it.
 
+Each account is configured from its own component's block, so annotations can
+differ between them:
+
+```yaml
+worker:
+  serviceAccount:
+    create: true
+    annotations:
+      team: platform
+```
+
 The API and the worker each carry `azure.workload.identity/client-id` and, when
 `azure.tenantId` is set, `tenant-id`. The tenant annotation is omitted rather than
 written empty: without it the webhook falls back to the tenant the cluster's
 workload identity add-on was installed with, which is right up until the identity
 lives in a different tenant.
+
+**Your annotations are merged over the chart's, so they win.** That is how a
+component gets its own managed identity -- no separate setting for it:
+
+```yaml
+worker:
+  serviceAccount:
+    annotations:
+      azure.workload.identity/client-id: <a different identity>
+```
+
+Merged rather than printed one block after the other, which would emit the same
+key twice and leave it to whichever parser reads the manifest to decide.
 
 > **Coming from a chart before 0.2.3, create the federated credentials first.**
 > The account names are new, so the credential pointing at the old shared

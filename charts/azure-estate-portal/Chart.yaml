@@ -5,7 +5,7 @@ type: application
 
 # The chart's own version, bumped for any change to the chart. appVersion tracks
 # the product, which releases on its own cadence.
-version: 0.2.3
+version: 0.2.4
 appVersion: "0.8.1"
 
 home: https://github.com/TrimTechBr/charts

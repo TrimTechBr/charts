@@ -57,13 +57,17 @@ level would never run.
 {{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach -- a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
 {{- end -}}
 
+{{- $legacySA := .Values.serviceAccount | default dict -}}
 {{/*
-  serviceAccount.name is gone: there are three accounts now, and one name cannot
-  say which it means. Refused rather than ignored -- a name that is quietly
-  dropped is one you believe you set.
+  The shared serviceAccount block moved into api/worker/webapp, so that each can
+  carry its own annotations. Refused rather than ignored -- settings that are
+  silently dropped are the ones you believe are in effect.
+
+  create: true is the exception: it is what the per-component blocks default to,
+  so a --reuse-values upgrade carrying it changes nothing and need not fail.
 */}}
-{{- if .Values.serviceAccount.name -}}
-{{- fail "\n\nserviceAccount.name no longer exists.\n\nEach Deployment now has its own account, named after the release and the\ncomponent: <release>-azure-estate-portal-{api,worker,webapp}. Remove the\nsetting; use serviceAccount.annotations for anything you were attaching.\n" -}}
+{{- if or $legacySA.name $legacySA.annotations (and (hasKey $legacySA "create") (not $legacySA.create)) -}}
+{{- fail "\n\nThe shared serviceAccount block no longer exists.\n\nEach Deployment now configures its own, so that annotations can differ:\n\n  api:\n    serviceAccount:\n      create: true\n      annotations: {}\n\nand the same under worker: and webapp:. The accounts are named\n<release>-azure-estate-portal-{api,worker,webapp}; there is no name override,\nbecause the name has to match the federated credential subject.\n" -}}
 {{- end -}}
 
 {{- range $component := list "api" "webapp" -}}

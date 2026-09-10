@@ -58,14 +58,6 @@ azure:
     # Same caveat as database.connectionString.
     value: ""
 
-# One account per Deployment, named <release>-azure-estate-portal-{api,worker,webapp}.
-# No name override: with three accounts a single name cannot say which one it means.
-serviceAccount:
-  create: true
-  # Applied to all three. The Azure workload identity annotations are added on top,
-  # to the API and the worker only -- the UI never calls Azure.
-  annotations: {}
-
 # -- Ingress -----------------------------------------------------------------
 ingress:
   enabled: true
@@ -151,6 +143,17 @@ api:
     # Wins over maxUnavailable when both are set, because the API rejects an object
     # carrying both.
     minAvailable: ""
+  # Its own account, named <release>-azure-estate-portal-api. There is no name
+  # override: the name has to match the federated credential's subject, and a
+  # rename is a change on the Azure side too, not a value to flip here.
+  serviceAccount:
+    create: true
+    # Merged over what the chart writes, so an annotation set here wins. That is how
+    # a component gets its own managed identity: set
+    # azure.workload.identity/client-id here and it overrides azure.workloadIdentity.clientId
+    # for this account alone.
+    annotations: {}
+
   resources:
     requests:
       cpu: 100m
@@ -169,6 +172,13 @@ worker:
   # same run and collects the same estate twice. One is the only working answer,
   # the Deployment hardcodes it, and a setting that accepts a single value is not
   # a setting.
+  # Its own account, named <release>-azure-estate-portal-worker. There is no name
+  # override: the name has to match the federated credential's subject, and a
+  # rename is a change on the Azure side too, not a value to flip here.
+  serviceAccount:
+    create: true
+    annotations: {}
+
   resources:
     requests:
       cpu: 100m
@@ -195,6 +205,13 @@ webapp:
     enabled: true
     maxUnavailable: 1
     minAvailable: ""
+  # Its own account, named <release>-azure-estate-portal-webapp. There is no name
+  # override: the name has to match the federated credential's subject, and a
+  # rename is a change on the Azure side too, not a value to flip here.
+  serviceAccount:
+    create: true
+    annotations: {}
+
   resources:
     requests:
       cpu: 50m
