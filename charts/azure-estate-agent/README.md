@@ -4,7 +4,7 @@ Reports Kubernetes workloads from inside an AKS cluster to an Azure Estate
 Portal.
 
 **The traffic is outbound only.** The portal never opens a connection to this
-cluster, which is why a private API server does not matter — and why there is no
+cluster, which is why a private API server does not matter -- and why there is no
 kubeconfig to store anywhere. The agent authenticates to its own cluster with the
 ServiceAccount token the kubelet projects into it, and to the portal with a
 per-cluster key the portal holds only as a hash.
@@ -13,8 +13,8 @@ per-cluster key the portal holds only as a hash.
 
 | | Alive | Can do |
 |---|---|---|
-| `…-scan` (CronJob) | seconds a day | read every namespace, pod, node and workload |
-| `…-listener` (Deployment) | always | create a Job in its own namespace, and nothing else |
+| `...-scan` (CronJob) | seconds a day | read every namespace, pod, node and workload |
+| `...-listener` (Deployment) | always | create a Job in its own namespace, and nothing else |
 
 The pod that runs permanently **cannot read a single workload**. The cluster-wide
 read exists only while the ephemeral scan job is up.
@@ -25,8 +25,8 @@ connection here, so the cluster asks.
 
 ## Installing
 
-Generate the key in the portal under **Kubernetes → Clusters → Install agent**.
-It is shown once — only its hash is stored.
+Generate the key in the portal under **Kubernetes -> Clusters -> Install agent**.
+It is shown once -- only its hash is stored.
 
 ```bash
 kubectl create namespace estate-agent
@@ -48,7 +48,7 @@ portal:
   existingSecret: estate-agent-key
 ```
 
-Then turn collection on in the portal — it is off by default:
+Then turn collection on in the portal -- it is off by default:
 
 ```
 Kubernetes__CollectWorkloads=true
@@ -84,11 +84,11 @@ rather than a mix of whenever each cluster happened to report.
 **Kubernetes RBAC has no metadata-only verb.** Granting `list` on Secrets grants
 reading their values. The agent asks the API server for `PartialObjectMetadata`
 so values are stripped before they reach it, and the portal has no field to store
-them in — but that is the agent behaving, not the cluster preventing.
+them in -- but that is the agent behaving, not the cluster preventing.
 
 Turning it on buys one thing: finding Secrets that no workload uses.
 
-Without it you still get which Secrets **are** used — that comes from pod specs
+Without it you still get which Secrets **are** used -- that comes from pod specs
 and needs no permission on the Secrets at all. Only the "exists and nobody uses
 it" half is missing, and the portal says so rather than showing zero.
 
@@ -117,12 +117,12 @@ kubectl -n estate-agent logs job/<the scan job>
 |---|---|
 | `401` | the key is not registered, or was revoked in the portal |
 | `403` | `portal.clusterId` names a different cluster than the key belongs to |
-| `413` | the payload is over the portal's limit — lower `scan.maxPods` |
-| `400` | the portal is older than this agent — upgrade the portal |
+| `413` | the payload is over the portal's limit -- lower `scan.maxPods` |
+| `400` | the portal is older than this agent -- upgrade the portal |
 | `Agent__ApiKey is not set` | the secret is not mounted; check `portal.existingSecret` |
 | nothing at all | check this cluster can reach `portal.url` outbound |
 
-The portal's own **Kubernetes → Clusters** page distinguishes an agent that never
+The portal's own **Kubernetes -> Clusters** page distinguishes an agent that never
 reported from one that reported and went quiet.
 
 ## Uninstalling
@@ -131,6 +131,6 @@ reported from one that reported and went quiet.
 helm uninstall estate-agent --namespace estate-agent
 ```
 
-Revoke the key in the portal as well, under **Kubernetes → Clusters → Revoke**.
+Revoke the key in the portal as well, under **Kubernetes -> Clusters -> Revoke**.
 That also discards the cluster's staged payload, so a revoked agent's last push
 cannot keep appearing in new sync runs.

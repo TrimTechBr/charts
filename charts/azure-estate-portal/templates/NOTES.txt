@@ -1,4 +1,4 @@
-{{ .Chart.Name }} {{ .Chart.Version }} — Azure Estate Portal {{ .Chart.AppVersion }}
+{{ .Chart.Name }} {{ .Chart.Version }} -- Azure Estate Portal {{ .Chart.AppVersion }}
 
 {{ if .Values.ingress.enabled -}}
 Open the portal at:
@@ -47,8 +47,8 @@ missing, and the screen says so.
 
 {{- if .Values.config.collectKubernetesWorkloads }}
 Workload collection is on. It stays empty until an agent is installed in each
-cluster — see the azure-estate-agent chart. Generate a key per cluster in the
-portal under Kubernetes → Clusters.
+cluster -- see the azure-estate-agent chart. Generate a key per cluster in the
+portal under Kubernetes -> Clusters.
 {{- else }}
 Workload collection is off. To inventory what runs inside your AKS clusters, set
 config.collectKubernetesWorkloads=true and install the azure-estate-agent chart

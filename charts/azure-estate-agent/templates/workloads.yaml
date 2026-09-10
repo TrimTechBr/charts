@@ -60,7 +60,7 @@ spec:
                   mountPath: /tmp
           volumes:
             {{- /*
-              The root filesystem is read-only, and .NET still wants somewhere to write — its diagnostics socket
+              The root filesystem is read-only, and .NET still wants somewhere to write -- its diagnostics socket
               and the temporary files the runtime creates on start. Without this the
               container starts and then fails on something unrelated-looking.
             */}}
@@ -82,7 +82,7 @@ spec:
 ---
 {{/*
   Always running, and reads nothing. It asks the portal whether a scan has been
-  requested and, when one has, instantiates the CronJob above — the same thing
+  requested and, when one has, instantiates the CronJob above -- the same thing
   `kubectl create job --from=cronjob/...` does, so it needs no pod template of its
   own to keep in step.
 */ -}}

@@ -51,7 +51,7 @@ spec:
             {{- end }}
           {{- /*
             The worker serves no HTTP. It touches a heartbeat file as it works, so
-            liveness is "the file is younger than two minutes" — which stays true
+            liveness is "the file is younger than two minutes" -- which stays true
             through a long collection and goes false if the loop wedges.
           */}}
           livenessProbe:

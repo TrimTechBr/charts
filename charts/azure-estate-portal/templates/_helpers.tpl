@@ -109,7 +109,7 @@ right whenever the UI and the API share a hostname.
 {{- printf "%s://%s/" $scheme .Values.ingress.host -}}
 {{- else -}}
 {{/*
-  The first hostname on the route. With several, the UI can only be built for one —
+  The first hostname on the route. With several, the UI can only be built for one --
   the others still serve it, and the API calls go to whichever this names. Set
   webapp.apiBaseUrl when that is not the one you want.
 
@@ -133,7 +133,7 @@ The environment both the API and the worker need to reach the database and Azure
 {{- if .Values.azure.clientSecret.enabled }}
 {{/*
 DefaultAzureCredential reads these three before it tries workload identity, so
-setting them is the whole of the non-AKS path — no application change.
+setting them is the whole of the non-AKS path -- no application change.
 */}}
 - name: AZURE_TENANT_ID
   value: {{ .Values.azure.tenantId | quote }}

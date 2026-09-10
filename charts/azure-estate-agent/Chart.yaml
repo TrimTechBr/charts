@@ -1,10 +1,10 @@
 apiVersion: v2
 name: azure-estate-agent
-description: Reports Kubernetes workloads from inside an AKS cluster to an Azure Estate Portal. Outbound only — the portal never connects to the cluster.
+description: Reports Kubernetes workloads from inside an AKS cluster to an Azure Estate Portal. Outbound only -- the portal never connects to the cluster.
 type: application
 
-version: 0.2.0
-appVersion: "0.8.0"
+version: 0.2.1
+appVersion: "0.8.1"
 
 home: https://github.com/TrimTechBr/charts
 sources:
@@ -32,7 +32,7 @@ annotations:
     - kind: added
       description: The ClusterRole gains read on networkpolicies and on the RBAC API group, which the portal needs for the Network and Access pages
     - kind: changed
-      description: Agent 0.8.0 sends payload version 2 — network policies, cluster RBAC, per-node request totals and the Service-to-workload mapping the topology walks
+      description: Agent 0.8.0 sends payload version 2 -- network policies, cluster RBAC, per-node request totals and the Service-to-workload mapping the topology walks
     - kind: fixed
       description: Agent 0.7.2, where a successful scan exits zero instead of being reported as a failed Job
     - kind: fixed

@@ -24,12 +24,12 @@ env:
   CHART_NAMESPACE: trimtechbr/charts
 
 jobs:
-  # ────────────────────────────────────────────────────────────────────────────
+  # ----------------------------------------------------------------------------
   # Lint and render. Every chart is rendered with each of its ci/*-values.yaml
-  # files and the result validated against the Kubernetes schemas — which is the
+  # files and the result validated against the Kubernetes schemas -- which is the
   # half `helm lint` does not do: lint parses YAML, kubeconform checks the fields
   # actually exist.
-  # ────────────────────────────────────────────────────────────────────────────
+  # ----------------------------------------------------------------------------
   validate:
     name: Lint and render
     runs-on: ubuntu-latest
@@ -71,12 +71,12 @@ jobs:
             for values in "$chart"ci/*-values.yaml; do
               echo "::group::$name ($(basename "$values"))"
               # --strict rejects fields that are not in the schema, which is what
-              # catches a typo in a field name — the failure mode that otherwise
+              # catches a typo in a field name -- the failure mode that otherwise
               # installs cleanly and does nothing.
               # The CRD catalog is what knows HTTPRoute: it is a Gateway API type rather
               # than a built-in one, and kubeconform's default schemas cover only the core
               # API. These two lines were removed once, correctly, when the charts installed
-              # no custom resource at all — and adding the first one back without them is
+              # no custom resource at all -- and adding the first one back without them is
               # what failed this job.
               helm template "$name" "$chart" --namespace estate --values "$values" \
                 | kubeconform -strict -summary -kubernetes-version 1.31.0 \
@@ -113,11 +113,11 @@ jobs:
           expect_fail "agent without a key"              $A --set portal.url=https://e --set portal.clusterId=x || failed=1
           exit $failed
 
-  # ────────────────────────────────────────────────────────────────────────────
+  # ----------------------------------------------------------------------------
   # Publish. Only from main, and only a version the registry does not have:
   # re-pushing an existing chart version would change what someone already
   # installed under that number.
-  # ────────────────────────────────────────────────────────────────────────────
+  # ----------------------------------------------------------------------------
   publish:
     name: Publish to GHCR
     runs-on: ubuntu-latest
@@ -170,7 +170,7 @@ jobs:
             ref="$REGISTRY/$CHART_NAMESPACE/$name:$version"
 
             if helm show chart "oci://$REGISTRY/$CHART_NAMESPACE/$name" --version "$version" >/dev/null 2>&1; then
-              echo "$name $version is already published — bump the version in Chart.yaml to release."
+              echo "$name $version is already published -- bump the version in Chart.yaml to release."
               continue
             fi
 

@@ -98,10 +98,10 @@ so this is the whole of its configuration surface.
 {{- end -}}
 
 {{- if not .Values.portal.clusterId -}}
-{{- fail "\n\nportal.clusterId is required — the ARM resource id of THIS cluster.\n\n  az aks show -g <rg> -n <cluster> --query id -o tsv\n\nA cluster cannot know its own Azure resource id from the inside, and the portal\nrefuses a payload that names a different cluster than the key belongs to.\n" -}}
+{{- fail "\n\nportal.clusterId is required -- the ARM resource id of THIS cluster.\n\n  az aks show -g <rg> -n <cluster> --query id -o tsv\n\nA cluster cannot know its own Azure resource id from the inside, and the portal\nrefuses a payload that names a different cluster than the key belongs to.\n" -}}
 {{- end -}}
 
 {{- if and (not .Values.portal.existingSecret) (not .Values.portal.apiKey) -}}
-{{- fail "\n\nAn agent key is required. Generate one in the portal under Kubernetes → Clusters;\nit is shown once, because only its hash is stored.\n\n  Preferred — a secret you create:\n    kubectl create secret generic estate-agent-key --from-literal=apiKey='<key>'\n    --set portal.existingSecret=estate-agent-key\n\n  Or:\n    --set portal.apiKey='<key>'\n" -}}
+{{- fail "\n\nAn agent key is required. Generate one in the portal under Kubernetes -> Clusters;\nit is shown once, because only its hash is stored.\n\n  Preferred -- a secret you create:\n    kubectl create secret generic estate-agent-key --from-literal=apiKey='<key>'\n    --set portal.existingSecret=estate-agent-key\n\n  Or:\n    --set portal.apiKey='<key>'\n" -}}
 {{- end -}}
 {{- end -}}

@@ -1,7 +1,7 @@
 # azure-estate-portal
 
 Discovery, analysis and observability reporting for Azure environments. Installs
-three components — the API, the sync worker and the web UI — behind one hostname.
+three components -- the API, the sync worker and the web UI -- behind one hostname.
 
 ## Before you install
 
@@ -40,7 +40,7 @@ helm install estate oci://ghcr.io/trimtechbr/charts/azure-estate-portal \
 
 The UI is served at `/` and the API at `/api`, on the same host. The browser
 therefore never makes a cross-origin request, and there is no CORS configuration
-that can be wrong — which is the failure that shows up as a blank screen with
+that can be wrong -- which is the failure that shows up as a blank screen with
 nothing in the logs.
 
 This works without a rewrite because the API already serves everything it has
@@ -80,8 +80,8 @@ make the safe migration the one you cannot express. While both are on, the UI is
 for the ingress hostname, because that is the one that already has DNS.
 
 > **A Gateway in another namespace needs a `ReferenceGrant` there**, allowing this
-> namespace to attach. The chart cannot create it — it belongs to whoever owns the
-> Gateway — and an HTTPRoute without one is accepted and never programmed. It reads as
+> namespace to attach. The chart cannot create it -- it belongs to whoever owns the
+> Gateway -- and an HTTPRoute without one is accepted and never programmed. It reads as
 > a routing bug and is a permission.
 
 If you publish the two on different hostnames instead, set
@@ -96,7 +96,7 @@ config:
 
 ## Azure identity
 
-Two paths, and the chart refuses both at once — `DefaultAzureCredential` reads
+Two paths, and the chart refuses both at once -- `DefaultAzureCredential` reads
 the environment before it tries workload identity, so a client secret would
 silently win and the federated credential would never be used.
 
@@ -137,10 +137,10 @@ azure:
 | `azure.workloadIdentity.clientId` | `""` | Required on AKS. |
 | `ingress.host` | `estate.example.com` | Required unless the ingress is disabled. |
 | `httpRoute.enabled` | `false` | Gateway API instead of, or alongside, the ingress. |
-| `httpRoute.parentRefs[0].name` | `""` | Required when enabled — the Gateway to attach to. |
+| `httpRoute.parentRefs[0].name` | `""` | Required when enabled -- the Gateway to attach to. |
 | `ingress.apiPaths` | `[/api]` | What the API serves through the ingress. |
 | `webapp.apiBaseUrl` | derived | What the browser calls. Only set it when the UI and API are on different hosts. |
-| `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `azure.*`, which is how the worker reads Azure — possibly a different tenant. |
+| `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `azure.*`, which is how the worker reads Azure -- possibly a different tenant. |
 | `config.collectKubernetesWorkloads` | `false` | Needs the agent chart installed in each cluster. |
 | `config.collectAcrDataPlane` | `true` | Registry contents. Needs `AcrPull` per registry. |
 | `config.extra` | `{}` | Any other setting, as ASP.NET configuration keys: `Metrics__WindowDays: "14"`. |
@@ -156,7 +156,7 @@ watching the terminal:
 - both Azure identity paths enabled
 - workload identity without a client id
 - nothing publishing the portal and no `webapp.apiBaseUrl`
-- an HTTPRoute with no Gateway to attach to, or with no hostname — one attaches to
+- an HTTPRoute with no Gateway to attach to, or with no hostname -- one attaches to
   every hostname its Gateway serves, which would put the portal on hostnames meant
   for other applications
 - more than one worker replica

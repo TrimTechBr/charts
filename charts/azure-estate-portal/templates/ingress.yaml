@@ -5,7 +5,7 @@
   be wrong.
 
   This works without a rewrite because the API already serves everything it has
-  under /api — the paths below are the application's own, not a prefix stripped
+  under /api -- the paths below are the application's own, not a prefix stripped
   on the way in.
 
   The API paths come first. Most controllers match longest-prefix regardless, but

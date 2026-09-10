@@ -55,7 +55,7 @@ spec:
               value: {{ include "estate.apiBaseUrl" . | quote }}
             {{- /*
               Sign-in for the UI. Deliberately separate from the identity the
-              worker uses to read Azure — different question, possibly different
+              worker uses to read Azure -- different question, possibly different
               tenant.
             */}}
             - name: AZURE_TENANT_ID

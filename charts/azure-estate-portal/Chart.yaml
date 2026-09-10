@@ -1,12 +1,12 @@
 apiVersion: v2
 name: azure-estate-portal
-description: Discovery, analysis and observability reporting for Azure environments — API, sync worker and web UI.
+description: Discovery, analysis and observability reporting for Azure environments -- API, sync worker and web UI.
 type: application
 
 # The chart's own version, bumped for any change to the chart. appVersion tracks
 # the product, which releases on its own cadence.
-version: 0.2.0
-appVersion: "0.8.0"
+version: 0.2.1
+appVersion: "0.8.1"
 
 home: https://github.com/TrimTechBr/charts
 sources:
@@ -40,9 +40,9 @@ annotations:
     - kind: added
       description: An HTTPRoute alternative to the Ingress, for clusters running Gateway API. Both can be on at once, so a migration can run the two side by side while DNS moves
     - kind: fixed
-      description: values.yaml uses ASCII section rules — the box-drawing ones rendered as mojibake under helm show values on a Windows console
+      description: values.yaml uses ASCII section rules -- the box-drawing ones rendered as mojibake under helm show values on a Windows console
     - kind: added
-      description: Portal 0.8.0 — Kubernetes network topology, cluster capacity and cluster RBAC
+      description: Portal 0.8.0 -- Kubernetes network topology, cluster capacity and cluster RBAC
     - kind: security
       description: All three pods now run as uid 10001 with runAsNonRoot, including the web pod, whose nginx moved to port 8080 and no longer needs root to start
     - kind: fixed

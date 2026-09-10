@@ -1,7 +1,7 @@
 {{/*
 Configuration that cannot work, refused at render time.
 
-Every one of these would otherwise install cleanly and fail later — a pod that
+Every one of these would otherwise install cleanly and fail later -- a pod that
 crash-loops on its first database call, or a UI that loads and then cannot reach
 anything. Failing here puts the reason in front of whoever ran helm install,
 which is the only moment someone is watching.
@@ -13,7 +13,7 @@ level would never run.
 {{- define "estate.validate" -}}
 
 {{- if and (not .Values.database.existingSecret) (not .Values.database.connectionString) -}}
-{{- fail "\n\nA PostgreSQL connection string is required.\n\n  Preferred — a secret you manage:\n    kubectl create secret generic estate-db --from-literal=connectionString='Host=...;Database=...;Username=...;Password=...'\n    --set database.existingSecret=estate-db\n\n  Or, for a first install:\n    --set database.connectionString='Host=...;Database=...;Username=...;Password=...'\n\nSQLite is not an option here: the API and the worker are separate deployments\nthat both write, and a file database corrupts under two writers.\n" -}}
+{{- fail "\n\nA PostgreSQL connection string is required.\n\n  Preferred -- a secret you manage:\n    kubectl create secret generic estate-db --from-literal=connectionString='Host=...;Database=...;Username=...;Password=...'\n    --set database.existingSecret=estate-db\n\n  Or, for a first install:\n    --set database.connectionString='Host=...;Database=...;Username=...;Password=...'\n\nSQLite is not an option here: the API and the worker are separate deployments\nthat both write, and a file database corrupts under two writers.\n" -}}
 {{- end -}}
 
 {{- if and .Values.azure.workloadIdentity.enabled .Values.azure.clientSecret.enabled -}}
@@ -38,16 +38,23 @@ level would never run.
 {{- end -}}
 
 {{- if .Values.httpRoute.enabled -}}
-{{- if not (first .Values.httpRoute.hostnames) -}}
+{{/*
+  compact on a defaulted list, rather than "first", because "first" dereferences a
+  nil list instead of returning nothing: hostnames=null -- which is how you clear a
+  list from --set -- crashed the render with a Go nil pointer panic rather than
+  printing the message below. compact also catches a list of empty strings.
+*/}}
+{{- if not (compact (default (list) .Values.httpRoute.hostnames)) -}}
 {{- fail "\n\nhttpRoute.hostnames must name at least one hostname.\n\nAn HTTPRoute with none attaches to every hostname its Gateway serves, which would\nput the portal on hostnames meant for other applications.\n" -}}
 {{- end -}}
-{{- if not (first .Values.httpRoute.parentRefs).name -}}
-{{- fail "\n\nhttpRoute.parentRefs[0].name is required — the Gateway this route attaches to.\n\n  --set httpRoute.parentRefs[0].name=<gateway> --set httpRoute.parentRefs[0].namespace=<its namespace>\n\nIf the Gateway is in another namespace it also needs a ReferenceGrant there allowing\nthis one to attach. The chart cannot create that, and a route without it is accepted\nand never programmed — which reads as a routing bug and is a permission.\n" -}}
+{{- $refs := compact (default (list) .Values.httpRoute.parentRefs) -}}
+{{- if or (not $refs) (not (first $refs).name) -}}
+{{- fail "\n\nhttpRoute.parentRefs[0].name is required -- the Gateway this route attaches to.\n\n  --set httpRoute.parentRefs[0].name=<gateway> --set httpRoute.parentRefs[0].namespace=<its namespace>\n\nIf the Gateway is in another namespace it also needs a ReferenceGrant there allowing\nthis one to attach. The chart cannot create that, and a route without it is accepted\nand never programmed -- which reads as a routing bug and is a permission.\n" -}}
 {{- end -}}
 {{- end -}}
 
 {{- if and (not .Values.ingress.enabled) (not .Values.httpRoute.enabled) (not .Values.webapp.apiBaseUrl) -}}
-{{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach — a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
+{{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach -- a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
 {{- end -}}
 
 {{- if gt (int .Values.worker.replicaCount) 1 -}}

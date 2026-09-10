@@ -6,7 +6,7 @@
 | [`azure-estate-agent`](charts/azure-estate-agent) | The workload agent | Every AKS cluster you want to inventory from the inside |
 
 The two are separate on purpose. The agent goes into clusters the portal cannot
-reach — every AKS API server in a real estate is private — and it carries a
+reach -- every AKS API server in a real estate is private -- and it carries a
 cluster-wide read role that has no business being part of a portal install.
 
 ## Installing
@@ -44,7 +44,7 @@ and `image.pullSecrets: [{name: ghcr}]` in your values.
 
 There is no release tag to remember. Bump `version` in the chart's `Chart.yaml`,
 merge to `main`, and CI publishes that version and signs it. A version the
-registry already has is skipped rather than overwritten — republishing a number
+registry already has is skipped rather than overwritten -- republishing a number
 someone already installed would change what that number means.
 
 `appVersion` tracks the product and moves with its releases; `version` is the
@@ -69,7 +69,7 @@ helm template estate charts/azure-estate-portal --values charts/azure-estate-por
 ```
 
 The files under each chart's `ci/` are what CI renders and validates. They are
-not examples to copy — a pipeline has no secret to point at, so they pass
+not examples to copy -- a pipeline has no secret to point at, so they pass
 credentials inline where a real install should use `existingSecret`.
 
 CI also asserts that the charts still **refuse** the configurations that cannot

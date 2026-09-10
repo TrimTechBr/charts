@@ -1,7 +1,7 @@
 # Azure Estate Portal
 #
 # Three components on one hostname: the web UI at "/", the API at "/api". They
-# share a hostname on purpose — the browser then never makes a cross-origin
+# share a hostname on purpose -- the browser then never makes a cross-origin
 # request, so there is no CORS configuration to get wrong.
 
 nameOverride: ""
@@ -93,7 +93,7 @@ httpRoute:
   annotations: {}
 
   # The Gateway to attach to. Usually owned by whoever runs the cluster's edge and
-  # living in its own namespace — which then needs a ReferenceGrant on that side,
+  # living in its own namespace -- which then needs a ReferenceGrant on that side,
   # allowing this namespace to attach. The chart cannot create that grant, and an
   # HTTPRoute without one is accepted and never programmed: it reads as a routing
   # bug and is a permission.
@@ -114,7 +114,7 @@ httpRoute:
     - /api
 
   # Whether the Gateway terminates TLS for these hostnames. The chart does not
-  # configure that — it belongs to the Gateway's listener — but the UI needs to know
+  # configure that -- it belongs to the Gateway's listener -- but the UI needs to know
   # the scheme to build the URL it calls itself on.
   tls: true
 
@@ -163,7 +163,7 @@ webapp:
   podAnnotations: {}
 
   # What the browser calls. Empty derives it from ingress.host, which is right
-  # whenever the UI and the API share a hostname — set it only when they do not.
+  # whenever the UI and the API share a hostname -- set it only when they do not.
   apiBaseUrl: ""
 
   # Sign-in for the UI (MSAL, browser-facing). Deliberately separate from the
@@ -192,7 +192,7 @@ config:
   extra: {}
 
 # All three pods. The uid is numeric because Kubernetes only reads the image config
-# and cannot resolve a user name — runAsNonRoot against an image whose USER is a
+# and cannot resolve a user name -- runAsNonRoot against an image whose USER is a
 # name is refused at admission, not at runtime. It matches the uid baked into all
 # three images, including the web one, whose nginx listens on 8080 and writes its
 # pid to /tmp so it needs no privilege to start.
