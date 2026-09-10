@@ -120,7 +120,20 @@ httpRoute:
 
 # -- Components --------------------------------------------------------------
 api:
+  # The floor when the autoscaler is off. minReplicas below is the floor when it
+  # is on -- this value is then ignored, and the Deployment omits the field so
+  # that a helm upgrade does not write it back over the autoscaler's decision.
   replicaCount: 2
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+    # Off by default, and think before turning it on: the .NET GC grows the heap
+    # toward the limit and does not hand it back, so memory reads as permanently
+    # high and the autoscaler ratchets up and never comes down.
+    targetMemoryUtilizationPercentage: ""
   resources:
     requests:
       cpu: 100m
@@ -134,8 +147,11 @@ api:
   extraEnv: []
 
 worker:
-  # One. The sync claims runs from a queue in the database, and a second worker
-  # would race for the same run.
+  # One, and there is no autoscaling block for the worker on purpose. The sync
+  # claims runs from a queue in the database, so a second replica races the first
+  # for the same run and collects the same estate twice. An autoscaler would do
+  # that on its own, and a sync pegs the CPU -- load is the one signal certain to
+  # trigger it at the worst possible moment.
   replicaCount: 1
   resources:
     requests:
@@ -151,6 +167,13 @@ worker:
 
 webapp:
   replicaCount: 2
+
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 4
+    targetCPUUtilizationPercentage: 70
+    targetMemoryUtilizationPercentage: ""
   resources:
     requests:
       cpu: 50m

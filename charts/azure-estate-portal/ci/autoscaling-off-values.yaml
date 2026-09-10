@@ -1,0 +1,22 @@
+# The same as default-values.yaml with the autoscalers off, so the Deployments
+# carry a replica count again and no HorizontalPodAutoscaler is rendered.
+#
+database:
+  connectionString: "Host=postgres;Database=estate;Username=estate;Password=ci-only"
+azure:
+  tenantId: "00000000-0000-0000-0000-000000000000"
+  workloadIdentity:
+    clientId: "11111111-1111-1111-1111-111111111111"
+ingress:
+  host: estate.ci.example
+  tls:
+    enabled: true
+image:
+  pullSecrets:
+    - name: ghcr
+api:
+  autoscaling:
+    enabled: false
+webapp:
+  autoscaling:
+    enabled: false

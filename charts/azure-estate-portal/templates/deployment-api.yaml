@@ -6,7 +6,14 @@ metadata:
     {{- include "estate.labels" . | nindent 4 }}
     app.kubernetes.io/component: api
 spec:
+  {{- /*
+    Omitted while the HPA owns it. A replicas field here is written back on every
+    helm upgrade, which would undo the autoscaler's decision and scale the pods
+    down mid-traffic on a change that had nothing to do with capacity.
+  */}}
+  {{- if not .Values.api.autoscaling.enabled }}
   replicas: {{ .Values.api.replicaCount }}
+  {{- end }}
   selector:
     matchLabels:
       {{- include "estate.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}

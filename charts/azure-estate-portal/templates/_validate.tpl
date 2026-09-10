@@ -57,6 +57,31 @@ level would never run.
 {{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach -- a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
 {{- end -}}
 
+{{- range $component := list "api" "webapp" -}}
+{{- $a := (index $.Values $component).autoscaling -}}
+{{- if $a.enabled -}}
+{{- if gt (int $a.minReplicas) (int $a.maxReplicas) -}}
+{{- fail (printf "\n\n%s.autoscaling.minReplicas is above maxReplicas.\n\nThe API server rejects the HorizontalPodAutoscaler, so the deployment installs\nwithout one and stays at whatever replica count it happens to have.\n" $component) -}}
+{{- end -}}
+{{/*
+  A CPU target is a percentage of the request. With no request there is nothing to
+  take a percentage of: the HPA reports <unknown>/70%, never scales, and reads as
+  a broken autoscaler rather than as missing configuration.
+*/}}
+{{- if not (dig "requests" "cpu" "" ((index $.Values $component).resources | default dict)) -}}
+{{- fail (printf "\n\n%s.autoscaling is on but %s.resources.requests.cpu is not set.\n\nA CPU target is a percentage of the request, so with no request there is nothing\nto take a percentage of. The autoscaler reports <unknown>/%d%% and never scales.\n\nSet the request, or %s.autoscaling.enabled=false.\n" $component $component (int $a.targetCPUUtilizationPercentage) $component) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+  The worker has no autoscaling block. Setting one would otherwise do nothing at
+  all, quietly, and someone would go looking for the HPA that never appeared.
+*/}}
+{{- if (.Values.worker.autoscaling | default dict).enabled -}}
+{{- fail "\n\nThe worker cannot be autoscaled.\n\nIt claims sync runs from a queue in the database, so a second replica races the\nfirst for the same run and collects the same estate twice. A sync also pegs the\nCPU, so load is the one signal certain to scale it up at the worst moment.\n\nScale the API instead -- it serves the UI and is what a busy portal is short of.\n" -}}
+{{- end -}}
+
 {{- if gt (int .Values.worker.replicaCount) 1 -}}
 {{- fail "\n\nworker.replicaCount must be 1.\n\nThe worker claims sync runs from a queue in the database. A second replica races\nfor the same run and both collect the same estate twice.\n" -}}
 {{- end -}}

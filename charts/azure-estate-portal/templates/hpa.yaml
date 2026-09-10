@@ -1,0 +1,44 @@
+{{/*
+  Autoscalers for the two components that can have more than one replica.
+
+  The worker deliberately has none. It claims sync runs from a queue in the
+  database, so a second replica races the first for the same run and collects the
+  same estate twice -- which is why the chart refuses worker.replicaCount > 1.
+  Scaling it on CPU would reintroduce exactly that, and a sync pegs the CPU, so
+  load is the one signal guaranteed to trigger it at the worst moment.
+*/}}
+{{- range $component := list "api" "webapp" }}
+{{- $cfg := index $.Values $component }}
+{{- if $cfg.autoscaling.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ printf "%s-%s" (include "estate.fullname" $) $component }}
+  labels:
+    {{- include "estate.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $component }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ printf "%s-%s" (include "estate.fullname" $) $component }}
+  minReplicas: {{ $cfg.autoscaling.minReplicas }}
+  maxReplicas: {{ $cfg.autoscaling.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cfg.autoscaling.targetCPUUtilizationPercentage }}
+    {{- with $cfg.autoscaling.targetMemoryUtilizationPercentage }}
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: {{ . }}
+    {{- end }}
+{{- end }}
+{{- end }}

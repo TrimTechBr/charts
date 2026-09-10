@@ -94,6 +94,34 @@ config:
     Cors__AllowedOrigins__0: https://estate.example.com
 ```
 
+## Scaling
+
+The API and the UI are autoscaled on CPU by default; the worker is not, and cannot
+be. It claims sync runs from a queue in the database, so a second replica races the
+first for the same run and collects the same estate twice -- and a sync pegs the
+CPU, which makes load the one signal certain to scale it up at the worst moment.
+The chart refuses `worker.autoscaling.enabled` rather than accepting it silently.
+
+```yaml
+api:
+  autoscaling:
+    enabled: true
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+```
+
+`minReplicas` is the floor while this is on; `replicaCount` applies only when it is
+off. The Deployment then omits `replicas` entirely, because a value there is written
+back on every `helm upgrade` and would undo whatever the autoscaler had decided.
+
+**Requires metrics-server** in the cluster -- AKS ships it. Without it the HPA
+reports `<unknown>` and holds at `minReplicas`, so nothing breaks, nothing scales.
+
+Memory targets are available and off by default. Think before turning one on: the
+.NET GC grows the heap toward the limit and does not hand it back, so memory reads
+as permanently high and the autoscaler ratchets up and never comes back down.
+
 ## Azure identity
 
 Two paths, and the chart refuses both at once -- `DefaultAzureCredential` reads
@@ -145,7 +173,9 @@ azure:
 | `config.collectAcrDataPlane` | `true` | Registry contents. Needs `AcrPull` per registry. |
 | `config.extra` | `{}` | Any other setting, as ASP.NET configuration keys: `Metrics__WindowDays: "14"`. |
 | `image.pullSecrets` | `[]` | Required while the packages are private. |
-| `worker.replicaCount` | `1` | Fixed at one. A second worker races the first for the same queued run. |
+| `api.autoscaling.enabled` | `true` | HPA on CPU, 2 to 6 replicas. Needs metrics-server. |
+| `webapp.autoscaling.enabled` | `true` | HPA on CPU, 2 to 4 replicas. |
+| `worker.replicaCount` | `1` | Fixed at one, and not autoscalable. A second worker races the first for the same queued run. |
 
 ## What the chart refuses
 
@@ -159,7 +189,9 @@ watching the terminal:
 - an HTTPRoute with no Gateway to attach to, or with no hostname -- one attaches to
   every hostname its Gateway serves, which would put the portal on hostnames meant
   for other applications
-- more than one worker replica
+- more than one worker replica, or any attempt to autoscale it
+- an autoscaler on a component whose CPU request was removed, or with minReplicas
+  above maxReplicas
 
 ## Upgrading
 
