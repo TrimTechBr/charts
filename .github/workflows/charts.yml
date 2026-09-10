@@ -73,8 +73,15 @@ jobs:
               # --strict rejects fields that are not in the schema, which is what
               # catches a typo in a field name — the failure mode that otherwise
               # installs cleanly and does nothing.
+              # The CRD catalog is what knows HTTPRoute: it is a Gateway API type rather
+              # than a built-in one, and kubeconform's default schemas cover only the core
+              # API. These two lines were removed once, correctly, when the charts installed
+              # no custom resource at all — and adding the first one back without them is
+              # what failed this job.
               helm template "$name" "$chart" --namespace estate --values "$values" \
                 | kubeconform -strict -summary -kubernetes-version 1.31.0 \
+                    -schema-location default \
+                    -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
                 || failed=1
               echo "::endgroup::"
             done
