@@ -37,8 +37,17 @@ level would never run.
 {{- fail "ingress.host is required when the ingress is enabled." -}}
 {{- end -}}
 
-{{- if and (not .Values.ingress.enabled) (not .Values.webapp.apiBaseUrl) -}}
-{{- fail "\n\nwebapp.apiBaseUrl is required when the ingress is disabled.\n\nThe UI runs in a browser, so it needs a URL the browser can reach — a\ncluster-internal service name will not do. With the chart's ingress this is\nderived from ingress.host; without it, say what it is.\n" -}}
+{{- if .Values.httpRoute.enabled -}}
+{{- if not (first .Values.httpRoute.hostnames) -}}
+{{- fail "\n\nhttpRoute.hostnames must name at least one hostname.\n\nAn HTTPRoute with none attaches to every hostname its Gateway serves, which would\nput the portal on hostnames meant for other applications.\n" -}}
+{{- end -}}
+{{- if not (first .Values.httpRoute.parentRefs).name -}}
+{{- fail "\n\nhttpRoute.parentRefs[0].name is required — the Gateway this route attaches to.\n\n  --set httpRoute.parentRefs[0].name=<gateway> --set httpRoute.parentRefs[0].namespace=<its namespace>\n\nIf the Gateway is in another namespace it also needs a ReferenceGrant there allowing\nthis one to attach. The chart cannot create that, and a route without it is accepted\nand never programmed — which reads as a routing bug and is a permission.\n" -}}
+{{- end -}}
+{{- end -}}
+
+{{- if and (not .Values.ingress.enabled) (not .Values.httpRoute.enabled) (not .Values.webapp.apiBaseUrl) -}}
+{{- fail "\n\nNothing publishes the portal, and webapp.apiBaseUrl is not set.\n\nThe UI runs in a browser, so it needs a URL the browser can reach — a\ncluster-internal service name will not do. Turn on ingress.enabled or\nhttpRoute.enabled and the chart derives it; publish the portal with your own\ngateway and say what the URL is.\n" -}}
 {{- end -}}
 
 {{- if gt (int .Values.worker.replicaCount) 1 -}}

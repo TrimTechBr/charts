@@ -100,6 +100,7 @@ jobs:
           expect_fail "portal with both identity paths"  $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set azure.clientSecret.enabled=true --set azure.clientSecret.clientId=c --set azure.clientSecret.value=v || failed=1
           expect_fail "portal with a second worker"      $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set worker.replicaCount=2 || failed=1
           expect_fail "portal with no ingress and no URL" $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set ingress.enabled=false || failed=1
+          expect_fail "portal route with no gateway"    $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set ingress.enabled=false --set httpRoute.enabled=true || failed=1
           expect_fail "agent without a portal URL"       $A --set portal.clusterId=x --set portal.apiKey=k || failed=1
           expect_fail "agent without a cluster id"       $A --set portal.url=https://e --set portal.apiKey=k || failed=1
           expect_fail "agent without a key"              $A --set portal.url=https://e --set portal.clusterId=x || failed=1

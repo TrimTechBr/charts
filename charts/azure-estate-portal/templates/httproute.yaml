@@ -1,0 +1,66 @@
+{{- if .Values.httpRoute.enabled }}
+{{/*
+  The Gateway API form of the same routing the Ingress does: the UI at "/" and the
+  API at "/api", on one hostname, so the browser never makes a cross-origin request.
+
+  Not a replacement for the ingress template — both can be on at once. Migrating from
+  Ingress to Gateway API means running the two side by side while DNS moves, and a
+  chart that forced the choice would make the safe migration the one you cannot
+  express.
+
+  The API rules come first. Gateway API specifies longest-prefix matching, so order
+  does not decide the outcome here the way it can with some ingress controllers — but
+  reading them in routing order is how anyone checks this file.
+*/}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "estate.fullname" . }}
+  labels:
+    {{- include "estate.labels" . | nindent 4 }}
+  {{- with .Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- range .Values.httpRoute.parentRefs }}
+    - name: {{ .name }}
+      {{- /*
+        A Gateway usually lives in its own namespace, owned by whoever runs the
+        cluster edge. Reaching across namespaces needs a ReferenceGrant on that side —
+        the chart cannot create it, and an HTTPRoute without one is accepted and never
+        programmed, which looks like a routing bug rather than a permission.
+      */ -}}
+      {{- with .namespace }}
+      namespace: {{ . }}
+      {{- end }}
+      {{- with .sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+      {{- with .port }}
+      port: {{ . }}
+      {{- end }}
+    {{- end }}
+  hostnames:
+    {{- range .Values.httpRoute.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    {{- range .Values.httpRoute.apiPaths }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ . | quote }}
+      backendRefs:
+        - name: {{ printf "%s-api" (include "estate.fullname" $) }}
+          port: 80
+    {{- end }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ printf "%s-webapp" (include "estate.fullname" .) }}
+          port: 80
+{{- end }}

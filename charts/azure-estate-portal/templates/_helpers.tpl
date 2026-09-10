@@ -104,9 +104,20 @@ right whenever the UI and the API share a hostname.
 {{- define "estate.apiBaseUrl" -}}
 {{- if .Values.webapp.apiBaseUrl -}}
 {{- .Values.webapp.apiBaseUrl -}}
-{{- else -}}
+{{- else if .Values.ingress.enabled -}}
 {{- $scheme := ternary "https" "http" .Values.ingress.tls.enabled -}}
 {{- printf "%s://%s/" $scheme .Values.ingress.host -}}
+{{- else -}}
+{{/*
+  The first hostname on the route. With several, the UI can only be built for one —
+  the others still serve it, and the API calls go to whichever this names. Set
+  webapp.apiBaseUrl when that is not the one you want.
+
+  The ingress wins when both are on, because during a migration the ingress is the
+  hostname that already has DNS.
+*/}}
+{{- $scheme := ternary "https" "http" .Values.httpRoute.tls -}}
+{{- printf "%s://%s/" $scheme (first .Values.httpRoute.hostnames) -}}
 {{- end -}}
 {{- end -}}
 

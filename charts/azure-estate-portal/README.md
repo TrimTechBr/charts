@@ -53,6 +53,37 @@ ingress:
     - /swagger     # the API explorer
 ```
 
+## Gateway API instead of Ingress
+
+The same routing, as an `HTTPRoute`:
+
+```yaml
+ingress:
+  enabled: false
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+      sectionName: https      # the listener, when the Gateway has more than one
+  hostnames:
+    - estate.example.com
+  tls: true                   # whether the Gateway terminates TLS, so the UI knows the scheme
+```
+
+Off by default: it needs the Gateway API CRDs installed and a Gateway to attach to,
+and a cluster without them would fail the install rather than skip the object.
+
+**Both can be on at once**, deliberately. Migrating from Ingress to Gateway API means
+running the two side by side while DNS moves, and a chart that forced the choice would
+make the safe migration the one you cannot express. While both are on, the UI is built
+for the ingress hostname, because that is the one that already has DNS.
+
+> **A Gateway in another namespace needs a `ReferenceGrant` there**, allowing this
+> namespace to attach. The chart cannot create it — it belongs to whoever owns the
+> Gateway — and an HTTPRoute without one is accepted and never programmed. It reads as
+> a routing bug and is a permission.
+
 If you publish the two on different hostnames instead, set
 `webapp.apiBaseUrl` and add the UI's origin to the API's CORS list through
 `config.extra`:
@@ -105,6 +136,8 @@ azure:
 | `database.connectionString` | `""` | Inline alternative. Stored in the release. |
 | `azure.workloadIdentity.clientId` | `""` | Required on AKS. |
 | `ingress.host` | `estate.example.com` | Required unless the ingress is disabled. |
+| `httpRoute.enabled` | `false` | Gateway API instead of, or alongside, the ingress. |
+| `httpRoute.parentRefs[0].name` | `""` | Required when enabled — the Gateway to attach to. |
 | `ingress.apiPaths` | `[/api]` | What the API serves through the ingress. |
 | `webapp.apiBaseUrl` | derived | What the browser calls. Only set it when the UI and API are on different hosts. |
 | `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `azure.*`, which is how the worker reads Azure — possibly a different tenant. |
@@ -122,7 +155,10 @@ watching the terminal:
 - no database configured
 - both Azure identity paths enabled
 - workload identity without a client id
-- the ingress disabled without `webapp.apiBaseUrl`
+- nothing publishing the portal and no `webapp.apiBaseUrl`
+- an HTTPRoute with no Gateway to attach to, or with no hostname — one attaches to
+  every hostname its Gateway serves, which would put the portal on hostnames meant
+  for other applications
 - more than one worker replica
 
 ## Upgrading

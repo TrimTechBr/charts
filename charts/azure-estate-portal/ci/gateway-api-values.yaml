@@ -1,0 +1,20 @@
+# Gateway API instead of Ingress. What a cluster running an implementation like
+# Istio, Envoy Gateway or Azure Application Gateway for Containers would use.
+database:
+  existingSecret: estate-db
+azure:
+  workloadIdentity:
+    clientId: "11111111-1111-1111-1111-111111111111"
+ingress:
+  enabled: false
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - estate.ci.example
+  apiPaths:
+    - /api
+    - /swagger

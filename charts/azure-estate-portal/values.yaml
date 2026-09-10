@@ -21,7 +21,7 @@ image:
   pullSecrets: []
   # - name: ghcr
 
-# ── Database ────────────────────────────────────────────────────────────────
+# -- Database ----------------------------------------------------------------
 # PostgreSQL is required. The API and the worker are separate deployments that
 # both write, so a file database would need shared writable storage and would
 # corrupt under two writers.
@@ -35,7 +35,7 @@ database:
   # is readable with `helm get values`, so prefer existingSecret in production.
   connectionString: ""
 
-# ── Azure identity ──────────────────────────────────────────────────────────
+# -- Azure identity ----------------------------------------------------------
 # What the worker uses to read the estate. Needs Reader + Monitoring Reader on
 # the subscriptions or management groups in scope, and AcrPull per registry to
 # inventory container images.
@@ -63,7 +63,7 @@ serviceAccount:
   name: ""
   annotations: {}
 
-# ── Ingress ─────────────────────────────────────────────────────────────────
+# -- Ingress -----------------------------------------------------------------
 ingress:
   enabled: true
   className: ""
@@ -80,7 +80,45 @@ ingress:
     # Empty with tls.enabled uses the ingress controller's default certificate.
     secretName: ""
 
-# ── Components ──────────────────────────────────────────────────────────────
+# -- Gateway API -------------------------------------------------------------
+# The same routing as the ingress above, expressed as an HTTPRoute. Off by default
+# because it needs the Gateway API CRDs installed and a Gateway to attach to, and a
+# cluster without them would fail the install rather than skip the object.
+#
+# Both can be on at once, deliberately: migrating from Ingress to Gateway API means
+# running the two side by side while DNS moves, and a chart that forced the choice
+# would make the safe migration the one you cannot express.
+httpRoute:
+  enabled: false
+  annotations: {}
+
+  # The Gateway to attach to. Usually owned by whoever runs the cluster's edge and
+  # living in its own namespace — which then needs a ReferenceGrant on that side,
+  # allowing this namespace to attach. The chart cannot create that grant, and an
+  # HTTPRoute without one is accepted and never programmed: it reads as a routing
+  # bug and is a permission.
+  parentRefs:
+    - name: ""
+      namespace: ""
+      # The listener to attach to, when the Gateway has more than one. Empty attaches
+      # to every listener whose hostname and protocol allow it.
+      sectionName: ""
+      port: null
+
+  hostnames:
+    - estate.example.com
+
+  # Same split as the ingress: everything under these goes to the API, the rest to
+  # the UI. Gateway API matches longest prefix, so "/api" wins over "/" on its own.
+  apiPaths:
+    - /api
+
+  # Whether the Gateway terminates TLS for these hostnames. The chart does not
+  # configure that — it belongs to the Gateway's listener — but the UI needs to know
+  # the scheme to build the URL it calls itself on.
+  tls: true
+
+# -- Components --------------------------------------------------------------
 api:
   replicaCount: 2
   resources:
@@ -135,7 +173,7 @@ webapp:
     tenantId: ""
     clientId: ""
 
-# ── Application settings ────────────────────────────────────────────────────
+# -- Application settings ----------------------------------------------------
 config:
   # Workloads inside the AKS clusters, reported by the agent chart. Off unless an
   # agent is installed: without one, every cluster would be reported as silent.
