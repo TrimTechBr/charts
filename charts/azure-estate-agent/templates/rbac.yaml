@@ -59,13 +59,19 @@ rules:
     resources: ["jobs", "cronjobs"]
     verbs: ["get", "list"]
   - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses"]
+    resources: ["ingresses", "networkpolicies"]
     verbs: ["get", "list"]
   - apiGroups: ["policy"]
     resources: ["poddisruptionbudgets"]
     verbs: ["get", "list"]
   - apiGroups: ["autoscaling"]
     resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list"]
+  # Reading *about* permissions, not through them. A Role says who may do what and
+  # carries no credential, so this grants no access the agent did not already have —
+  # it only lets the portal report the access that exists.
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "clusterroles", "rolebindings", "clusterrolebindings"]
     verbs: ["get", "list"]
   {{- /*
     Absent when no metrics server is installed. The agent reports that the usage
