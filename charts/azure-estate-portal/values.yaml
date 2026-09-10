@@ -149,17 +149,23 @@ worker:
   # same run and collects the same estate twice. One is the only working answer,
   # the Deployment hardcodes it, and a setting that accepts a single value is not
   # a setting.
-  # Its own account, named <release>-azure-estate-portal-worker. There is no name
-  # override: the name has to match the federated credential's subject, and a
-  # rename is a change on the Azure side too, not a value to flip here.
+
   # Azure identity, here rather than at the top level because the worker is the
   # only component that talks to Azure. The API reads the database and nothing
   # else -- it does not even reference the project that speaks ARM.
   #
-  # Reader and Monitoring Reader on the subscriptions or management groups in
-  # scope, and AcrPull per registry to inventory container images.
-  # What the worker uses to read the estate. Needs Reader + Monitoring Reader on
+  # Needs Reader and Monitoring Reader on the subscriptions or management groups
+  # in scope, and AcrPull per registry to inventory container images.
   azure:
+    # Outside the two blocks below, and not inside workloadIdentity, because it
+    # belongs to the credential rather than to either way of obtaining one. Every
+    # collector passes it to DefaultAzureCredentialOptions.TenantId: it becomes the
+    # tenant-id annotation under workload identity, AZURE_TENANT_ID under a client
+    # secret, and with neither enabled it is the only thing disambiguating whatever
+    # identity DefaultAzureCredential finds on its own.
+    #
+    # clientId is inside each block for the opposite reason: those are different
+    # identities -- a managed identity in one case, an app registration in the other.
     tenantId: ""
     # On AKS with the OIDC issuer enabled. Nothing is stored: the token is projected
     # into the pod.
@@ -176,6 +182,9 @@ worker:
       # Same caveat as database.connectionString.
       value: ""
 
+  # Its own account, named <release>-azure-estate-portal-worker. There is no name
+  # override: the name has to match the federated credential's subject, and a
+  # rename is a change on the Azure side too, not a value to flip here.
   serviceAccount:
     create: true
     annotations: {}
