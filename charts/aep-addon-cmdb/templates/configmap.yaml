@@ -1,0 +1,16 @@
+{{- include "cmdb.validate" . -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "cmdb.fullname" . }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+data:
+  Database__Provider: "PostgreSQL"
+  Cmdb__PathBase: {{ .Values.pathPrefix | quote }}
+  Discovery__PollSeconds: {{ .Values.config.discoveryPollSeconds | quote }}
+  Discovery__AppMap__MinCalls: {{ .Values.config.appMapMinCalls | quote }}
+  Discovery__AppMap__StaleAfterDays: {{ .Values.config.appMapStaleAfterDays | quote }}
+  {{- range $key, $value := .Values.config.extra }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

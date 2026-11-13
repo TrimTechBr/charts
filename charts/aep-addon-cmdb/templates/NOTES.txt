@@ -1,0 +1,54 @@
+{{- include "cmdb.validate" . -}}
+{{ .Chart.Name }} {{ .Chart.Version }} -- CMDB add-on {{ .Chart.AppVersion }}
+
+The CMDB API answers on the portal's host under {{ .Values.pathPrefix }}/.
+{{- if .Values.ingress.enabled }}
+  Ingress:   {{ .Values.ingress.host }}{{ .Values.pathPrefix }}
+{{- end }}
+{{- if .Values.httpRoute.enabled }}
+  HTTPRoute: {{ join ", " .Values.httpRoute.hostnames }} -> {{ .Values.pathPrefix }}
+{{- end }}
+
+Nothing appears in the portal until it is told about the add-on. Add this to the
+portal chart's values and upgrade it (the web pods restart to pick it up):
+
+addons:
+  - id: cmdb
+    manifestUrl: {{ include "cmdb.manifestUrl" . }}
+
+Who can use it:
+
+  - Users and groups need CMDB.Reader or CMDB.Operator on the enterprise
+    application {{ .Values.auth.clientId }}.
+  - The portal's UI asks for {{ default (printf "api://%s/access_as_user" .Values.auth.clientId) .Values.auth.apiScope }};
+    with a registration separate from the portal's, the portal's SPA registration
+    needs that delegated permission.
+
+{{ if .Values.worker.workloadIdentity.enabled -}}
+The worker reads the portal with a workload identity token:
+
+    portal API   {{ .Values.aep.apiUrl }}
+    scope        {{ .Values.aep.scope }}
+    identity     {{ .Values.worker.workloadIdentity.clientId }}
+
+That managed identity needs the portal's AEP.AddOn app role, and one federated
+credential naming this cluster's OIDC issuer and this subject:
+
+    system:serviceaccount:{{ .Release.Namespace }}:{{ include "cmdb.serviceAccountName" (dict "root" . "component" "worker") }}
+{{- else -}}
+Workload identity is off. The worker still asks DefaultAzureCredential for a token
+for {{ .Values.aep.scope }}; it must find a credential holding the portal's
+AEP.AddOn role in worker.extraEnv, or every pass ends in 401.
+{{- end }}
+
+Check it came up:
+
+    kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-api" (include "cmdb.fullname" .) }}
+    kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-worker" (include "cmdb.fullname" .) }}
+
+{{- if and (not .Values.database.existingSecret) .Values.database.connectionString }}
+
+  The database connection string was passed inline, so it is stored in the release
+  and `helm get values` will print it. Move it to a secret you manage and set
+  database.existingSecret when you get the chance.
+{{- end }}

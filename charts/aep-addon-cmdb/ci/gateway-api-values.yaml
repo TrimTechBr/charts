@@ -1,0 +1,31 @@
+# Gateway API instead of Ingress, beside a portal published the same way (the
+# portal chart's ci/gateway-api-values.yaml). Also the full auth case: the portal's
+# registration reused with a custom Application ID URI, so audience and scope are
+# stated rather than derived.
+database:
+  existingSecret: cmdb-db
+auth:
+  tenantId: "00000000-0000-0000-0000-000000000000"
+  clientId: "33333333-3333-3333-3333-333333333333"
+  audience: "api://estate-api.ci.example"
+  apiScope: "api://estate-api.ci.example/access_as_user"
+aep:
+  apiUrl: "http://estate-azure-estate-portal-api.estate.svc.cluster.local/"
+  scope: "api://estate-api.ci.example/.default"
+ingress:
+  enabled: false
+httpRoute:
+  enabled: true
+  parentRefs:
+    - name: shared-gateway
+      namespace: gateway-system
+      sectionName: https
+  hostnames:
+    - estate.ci.example
+worker:
+  workloadIdentity:
+    clientId: "66666666-6666-6666-6666-666666666666"
+config:
+  discoveryPollSeconds: 300
+  extra:
+    Cmdb__EnvironmentAliases__production: prd
