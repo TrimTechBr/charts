@@ -1,0 +1,22 @@
+# What CI renders and validates. Not an example to copy: the connection string is
+# inline here because a pipeline has no secret to point at, and a real install
+# should use database.existingSecret.
+database:
+  connectionString: "Host=postgres;Database=cmdb;Username=cmdb;Password=ci-only"
+auth:
+  tenantId: "00000000-0000-0000-0000-000000000000"
+  clientId: "55555555-5555-5555-5555-555555555555"
+aep:
+  apiUrl: "http://estate-azure-estate-portal-api.estate.svc.cluster.local/"
+  scope: "api://33333333-3333-3333-3333-333333333333/.default"
+ingress:
+  # The portal chart's ci/default-values.yaml host, so the two render as one site.
+  host: estate.ci.example
+  tls:
+    enabled: true
+image:
+  pullSecrets:
+    - name: ghcr
+worker:
+  workloadIdentity:
+    clientId: "66666666-6666-6666-6666-666666666666"

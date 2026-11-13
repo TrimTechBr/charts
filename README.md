@@ -4,10 +4,15 @@
 |---|---|---|
 | [`azure-estate-portal`](charts/azure-estate-portal) | The portal: API, sync worker and web UI | One cluster, yours |
 | [`azure-estate-agent`](charts/azure-estate-agent) | The workload agent | Every AKS cluster you want to inventory from the inside |
+| [`aep-addon-cmdb`](charts/aep-addon-cmdb) | The CMDB add-on: API and discovery worker | Beside the portal, published on the portal's host under `/addons/cmdb` |
 
-The two are separate on purpose. The agent goes into clusters the portal cannot
-reach -- every AKS API server in a real estate is private -- and it carries a
-cluster-wide read role that has no business being part of a portal install.
+The portal and the agent are separate on purpose. The agent goes into clusters the
+portal cannot reach -- every AKS API server in a real estate is private -- and it
+carries a cluster-wide read role that has no business being part of a portal install.
+
+Add-ons are separate charts for a different reason: each has its own database,
+identity and release cadence, and the portal only needs to know where its manifest
+is (the portal chart's `addons:` block).
 
 ## Installing
 

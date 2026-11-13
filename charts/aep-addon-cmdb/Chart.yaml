@@ -1,0 +1,37 @@
+apiVersion: v2
+name: aep-addon-cmdb
+description: CMDB add-on for the Azure Estate Portal -- systems, configuration items and their relations, discovered from what the portal collects. API and discovery worker, published on the portal's own host under /addons/cmdb.
+type: application
+
+# The chart's own version, bumped for any change to the chart. appVersion tracks
+# the add-on, which releases on its own cadence.
+version: 0.1.0
+appVersion: "0.1.0"
+
+home: https://github.com/TrimTechBr/charts
+sources:
+  - https://github.com/TrimTechBr/charts
+keywords:
+  - azure
+  - cmdb
+  - inventory
+  - azure-estate-portal
+  - add-on
+
+maintainers:
+  - name: TrimTechBR
+    url: https://github.com/TrimTechBr
+
+annotations:
+  artifacthub.io/license: MIT
+  # One image, two processes: the API is its entrypoint, the worker runs from the
+  # same image with a command override.
+  artifacthub.io/images: |
+    - name: aep-addon-cmdb
+      image: ghcr.io/trimtechbr/aep-addon-cmdb:0.1.0
+  artifacthub.io/links: |
+    - name: source
+      url: https://github.com/TrimTechBr/charts
+  artifacthub.io/changes: |
+    - kind: added
+      description: First release of the chart -- the CMDB API (which also serves the add-on UI assemblies) and the discovery worker, on the portal's host under /addons/cmdb through an Ingress or an HTTPRoute
