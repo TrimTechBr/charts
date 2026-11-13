@@ -16,6 +16,42 @@ level would never run.
 {{- fail "\n\nA PostgreSQL connection string is required.\n\n  Preferred -- a secret you manage:\n    kubectl create secret generic estate-db --from-literal=connectionString='Host=...;Database=...;Username=...;Password=...'\n    --set database.existingSecret=estate-db\n\n  Or, for a first install:\n    --set database.connectionString='Host=...;Database=...;Username=...;Password=...'\n\nSQLite is not an option here: the API and the worker are separate deployments\nthat both write, and a file database corrupts under two writers.\n" -}}
 {{- end -}}
 
+{{/*
+  The API fails closed: outside Development it throws before listening when either
+  id is missing, and there is no setting that turns authentication off. A pod that
+  crash-loops is a worse place to learn that than this message. dig, so that
+  api.auth=null -- how a --set clears a map -- reaches the message and not a nil
+  pointer panic.
+*/}}
+{{- if or (not (dig "auth" "tenantId" "" .Values.api)) (not (dig "auth" "clientId" "" .Values.api)) -}}
+{{- fail "\n\napi.auth.tenantId and api.auth.clientId are required.\n\nThe API validates an Entra ID token on every call and will not start without\nthem. Create one app registration (it serves both the UI and the API):\n\n  - Expose an API: Application ID URI api://<client id>, scope access_as_user\n  - App roles AEP.Reader and AEP.Admin (users/groups) and AEP.AddOn (applications)\n  - Assign users or groups to AEP.Reader / AEP.Admin on its enterprise application\n\nthen:\n\n  --set api.auth.tenantId=<tenant id> --set api.auth.clientId=<client id>\n\nThe UI signs in with the same registration unless webapp.azureAd.* says otherwise.\n" -}}
+{{- end -}}
+
+{{/*
+  Add-ons. The id becomes a URL segment twice (/apps/<id>/ in the UI, /addons/<id>/
+  on the backend) and a navigation key, so it is held to a shape that is safe in
+  all three; two entries with one id would make the second silently shadow the
+  first. Nil-safe for the same reason as the httpRoute guards below: addons=null,
+  or a null entry, must reach a message rather than a panic.
+*/}}
+{{- $seen := dict -}}
+{{- range $i, $a := (default (list) .Values.addons) -}}
+{{- if not (kindIs "map" $a) -}}
+{{- fail (printf "\n\naddons[%d] is not an entry. Each add-on is a map:\n\n  addons:\n    - id: cmdb\n      manifestUrl: /addons/cmdb/manifest.json\n" $i) -}}
+{{- end -}}
+{{- $id := toString (default "" $a.id) -}}
+{{- if not (regexMatch "^[a-z][a-z0-9-]{1,31}$" $id) -}}
+{{- fail (printf "\n\naddons[%d].id %q is not a valid add-on id.\n\nIt must match ^[a-z][a-z0-9-]{1,31}$ -- a lower-case letter, then 1 to 31\nlower-case letters, digits or hyphens. It becomes the URL prefixes /apps/<id>/\nand /addons/<id>/, and has to equal the id in the add-on's own manifest.\n" $i $id) -}}
+{{- end -}}
+{{- if not (trim (toString (default "" $a.manifestUrl))) -}}
+{{- fail (printf "\n\naddons[%d] (%s) has no manifestUrl.\n\nIt is where the UI downloads the add-on's manifest. Usually relative, on this\nsame host, where the add-on chart publishes its backend:\n\n  manifestUrl: /addons/%s/manifest.json\n" $i $id $id) -}}
+{{- end -}}
+{{- if hasKey $seen $id -}}
+{{- fail (printf "\n\nThe add-on id %q appears more than once in addons.\n\nThe UI keys add-ons by id -- menu section, routes and loaded assemblies -- so a\nsecond entry would shadow the first. Remove one.\n" $id) -}}
+{{- end -}}
+{{- $_ := set $seen $id true -}}
+{{- end -}}
+
 {{- if and .Values.worker.azure.workloadIdentity.enabled .Values.worker.azure.clientSecret.enabled -}}
 {{- fail "\n\nazure.workloadIdentity.enabled and azure.clientSecret.enabled are both on.\n\nDefaultAzureCredential reads the environment before it tries workload identity,\nso the client secret would silently win and the federated identity would never\nbe used. Pick one.\n" -}}
 {{- end -}}
