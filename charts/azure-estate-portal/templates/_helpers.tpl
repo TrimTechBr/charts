@@ -130,6 +130,42 @@ right whenever the UI and the API share a hostname.
 {{- end -}}
 
 {{/*
+Sign-in for the UI. Empty falls back to the API's registration, because one app
+registration serving both the SPA and the API is the recommended shape -- and a
+UI signing in to a tenant the API does not trust gets a token it cannot use.
+*/}}
+{{- define "estate.webappTenantId" -}}
+{{- default .Values.api.auth.tenantId .Values.webapp.azureAd.tenantId -}}
+{{- end -}}
+
+{{- define "estate.webappClientId" -}}
+{{- default .Values.api.auth.clientId .Values.webapp.azureAd.clientId -}}
+{{- end -}}
+
+{{/*
+The scope the SPA requests to call the API. Derived from the API's client id, not
+the SPA's: the token is for the API, and with two registrations the SPA's own id
+would name a scope the API never exposed.
+*/}}
+{{- define "estate.apiScope" -}}
+{{- default (printf "api://%s/access_as_user" .Values.api.auth.clientId) .Values.webapp.azureAd.apiScope -}}
+{{- end -}}
+
+{{/*
+The add-on list as the UI reads it: a compact JSON array of {id, manifestUrl}.
+Only those two keys, so an extra field in values cannot reach the browser by
+accident. toJson escapes "&" as &, which is the same string to any JSON
+parser.
+*/}}
+{{- define "estate.addonsJson" -}}
+{{- $out := list -}}
+{{- range (default (list) .Values.addons) -}}
+{{- $out = append $out (dict "id" .id "manifestUrl" .manifestUrl) -}}
+{{- end -}}
+{{- toJson $out -}}
+{{- end -}}
+
+{{/*
 The database, which the API and the worker both read.
 */}}
 {{- define "estate.dbEnv" -}}

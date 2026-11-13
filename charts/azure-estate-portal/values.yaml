@@ -42,8 +42,9 @@ ingress:
   annotations: {}
   host: estate.example.com
 
-  # Everything the API serves. "/api" covers the REST surface; add "/swagger" to
-  # expose the API explorer, or "/health" to probe from outside the cluster.
+  # Everything the API serves. "/api" covers the REST surface; add "/health" to
+  # probe from outside the cluster. There is no "/swagger" to add: the API
+  # explorer exists only in Development.
   apiPaths:
     - /api
 
@@ -106,6 +107,23 @@ api:
     # toward the limit and does not hand it back, so memory reads as permanently
     # high and the autoscaler ratchets up and never comes down.
     targetMemoryUtilizationPercentage: ""
+
+  # Who may call the API. Every endpoint except /health and the three agent
+  # endpoints needs an Entra ID token carrying one of the app roles AEP.Reader,
+  # AEP.Admin or AEP.AddOn. Both ids are required: outside Development the API
+  # refuses to start without them, so the chart refuses to render without them
+  # rather than install a pod that crash-loops. There is no setting that turns
+  # authentication off.
+  auth:
+    # The tenant that issues the tokens. -> AzureAd__TenantId
+    tenantId: ""
+    # Application (client) id of the app registration that exposes the API, with
+    # Application ID URI api://<clientId> and the scope access_as_user.
+    # -> AzureAd__ClientId
+    clientId: ""
+    # An extra accepted audience, for a custom Application ID URI. The client id and
+    # api://<clientId> are always accepted. -> AzureAd__Audience, only when set.
+    audience: ""
 
   # Bounds voluntary disruption only -- a node drain, a cluster upgrade, the node
   # autoscaler compacting nodes. Nothing here helps when a node simply dies; that
@@ -238,11 +256,34 @@ webapp:
   apiBaseUrl: ""
 
   # Sign-in for the UI (MSAL, browser-facing). Deliberately separate from the
-  # azure.* block above: that one is how the worker reads Azure, this one is who
-  # may open the portal. They can be different tenants.
+  # worker.azure.* block above: that one is how the worker reads Azure, this one is
+  # who may open the portal. They can be different tenants.
+  #
+  # Empty means the API's own registration (api.auth.*), which is the recommended
+  # shape: one app registration serves both the SPA and the API. Set these only
+  # when the SPA has a registration of its own.
   azureAd:
     tenantId: ""
     clientId: ""
+    # The scope the SPA asks for when it calls the API. Empty derives
+    # api://<api.auth.clientId>/access_as_user -- the API's, not the SPA's, since
+    # the token is for the API. -> API_SCOPE
+    apiScope: ""
+
+# -- Add-ons -----------------------------------------------------------------
+# Add-ons the UI loads at runtime, each from its own backend. Every entry needs an
+# id (lower-case, ^[a-z][a-z0-9-]{1,31}$, unique) and the URL of its manifest.
+# A relative URL is resolved against the portal's own origin, which is the normal
+# case: the add-on chart publishes its backend on this same host under
+# /addons/<id>/, so there is no CORS to configure. Its pages appear in the UI
+# under /apps/<id>/ -- a different prefix on purpose, so reloading a deep link
+# reaches the UI and not the add-on's API.
+#
+# Written into the UI as addons.json at container start, so a change restarts the
+# web pods. -> ADDONS_JSON
+addons: []
+# - id: cmdb
+#   manifestUrl: /addons/cmdb/manifest.json
 
 # -- Application settings ----------------------------------------------------
 config:
@@ -253,6 +294,14 @@ config:
   # Registry contents. Needs AcrPull per registry; registries without it are
   # reported as unread rather than empty.
   collectAcrDataPlane: true
+
+  # Application Map edges -- who calls whom, from the dependency telemetry of each
+  # Application Insights component. Reader is enough when the backing workspace
+  # allows resource-context access (the default); a workspace that requires
+  # workspace permissions answers 403 and needs Log Analytics Reader on it. A 403
+  # is reported as a collection error and never fails the sync.
+  # -> AppMap__Enabled
+  collectApplicationMap: true
 
   # Subscriptions collected in parallel. Measured: 14 subscriptions went from
   # 50m to 17m at 3, with the heap at 147 MB.

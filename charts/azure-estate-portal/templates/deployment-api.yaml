@@ -54,6 +54,19 @@ spec:
             - name: ASPNETCORE_URLS
               value: http://+:8080
             {{- include "estate.dbEnv" . | nindent 12 }}
+            {{- /*
+              Token validation. The API refuses to start outside Development
+              without the first two, and _validate.tpl refuses to render without
+              them, so they are never empty here.
+            */}}
+            - name: AzureAd__TenantId
+              value: {{ .Values.api.auth.tenantId | quote }}
+            - name: AzureAd__ClientId
+              value: {{ .Values.api.auth.clientId | quote }}
+            {{- with .Values.api.auth.audience }}
+            - name: AzureAd__Audience
+              value: {{ . | quote }}
+            {{- end }}
             {{- with .Values.api.extraEnv }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
