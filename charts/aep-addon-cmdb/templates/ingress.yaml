@@ -1,0 +1,44 @@
+{{- include "cmdb.validate" . -}}
+{{- if .Values.ingress.enabled }}
+{{- /*
+  One path on the portal's hostname. The portal's own Ingress keeps "/" (UI) and
+  "/api" (its API); this object adds only pathPrefix, and longest-prefix matching
+  sends that to the CMDB API whichever object a controller reads first.
+
+  No rewrite: the API is mounted under the same prefix (Cmdb__PathBase), so the
+  path it receives is the path the browser asked for.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "cmdb.fullname" . }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- with .Values.ingress.className }}
+  ingressClassName: {{ . }}
+  {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    - hosts:
+        - {{ .Values.ingress.host | quote }}
+      {{- with .Values.ingress.tls.secretName }}
+      secretName: {{ . }}
+      {{- end }}
+  {{- end }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: {{ .Values.pathPrefix | quote }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ printf "%s-api" (include "cmdb.fullname" .) }}
+                port:
+                  name: http
+{{- end }}

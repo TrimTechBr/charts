@@ -1,0 +1,206 @@
+# CMDB add-on for the Azure Estate Portal
+#
+# Two components from one image: the API, which also serves the add-on's UI
+# assemblies and manifest, and the discovery worker, which reads the portal's
+# read-only add-on API and writes the CMDB database.
+#
+# The API is published on the PORTAL's hostname, under pathPrefix. The portal's
+# UI loads the add-on from there, so the browser never makes a cross-origin
+# request and there is no CORS to configure. Install the portal chart first.
+
+nameOverride: ""
+fullnameOverride: ""
+
+image:
+  registry: ghcr.io
+  repository: trimtechbr/aep-addon-cmdb
+  # Empty means the chart's appVersion, so the chart and the add-on it installs
+  # cannot drift by accident.
+  tag: ""
+  pullPolicy: IfNotPresent
+  # Needed while the package is private. Create the secret first, e.g.
+  #   kubectl create secret docker-registry ghcr --docker-server=ghcr.io \
+  #     --docker-username=<user> --docker-password=<PAT with read:packages>
+  pullSecrets: []
+  # - name: ghcr
+
+# -- Database ----------------------------------------------------------------
+# PostgreSQL, and a database of its own -- not the portal's. The API and the
+# worker are separate deployments that both write, so a file database would need
+# shared writable storage and would corrupt under two writers. The API creates
+# the schema on its first start; the worker waits for it.
+database:
+  # Preferred: a secret you manage, so the connection string never passes through
+  # `helm get values` or the release secret.
+  existingSecret: ""
+  existingSecretKey: connectionString
+
+  # Convenience for a first install. The value lands in a chart-managed Secret and
+  # is readable with `helm get values`, so prefer existingSecret in production.
+  connectionString: ""
+
+# -- Who may call the CMDB API ------------------------------------------------
+# Every endpoint except the manifest, the UI assemblies and /health needs an Entra
+# ID token carrying CMDB.Reader or CMDB.Operator. Outside Development the API
+# refuses to start without tenantId and clientId, so the chart refuses to render
+# without them rather than install a pod that crash-loops. There is no setting
+# that turns authentication off.
+#
+# The registration can be the CMDB's own, or the portal's with the two CMDB roles
+# added to it. The code does not care; the scope below tells the portal's UI
+# which one to ask a token for.
+auth:
+  # The tenant that issues the tokens. Also the tenant the worker asks for its
+  # token to the portal in. -> AzureAd__TenantId (api and worker)
+  tenantId: ""
+  # Application (client) id of the registration that exposes the CMDB API, with
+  # Application ID URI api://<clientId>. -> AzureAd__ClientId
+  clientId: ""
+  # An extra accepted audience, for a custom Application ID URI. The client id and
+  # api://<clientId> are always accepted. -> AzureAd__Audience, only when set.
+  audience: ""
+  # The scope the portal's UI requests to call this API, published in the
+  # manifest. Empty derives api://<clientId>/access_as_user. -> Cmdb__ApiScope,
+  # only when set.
+  apiScope: ""
+
+# -- How the worker reads the portal -----------------------------------------
+# The worker has no Azure RBAC at all. Everything it knows comes from the portal's
+# read-only add-on API (/api/addons/v1), with a token for the app role AEP.AddOn.
+aep:
+  # Cluster-internal URL of the portal's API Service, the root of it (the worker
+  # appends api/addons/v1/ itself), e.g.
+  #   http://estate-azure-estate-portal-api.estate.svc.cluster.local/
+  # -> Aep__BaseUrl
+  apiUrl: ""
+  # The token scope for the portal's API: api://<portal api client id>/.default
+  # -- the api.auth.clientId of the portal chart. -> Aep__Scope
+  scope: ""
+
+# Where the API lives on the portal's host: the Ingress/HTTPRoute path AND the
+# API's own path base, so nothing rewrites the path on the way in. The portal's
+# addons entry then points at <pathPrefix>/manifest.json (NOTES.txt prints it).
+# -> Cmdb__PathBase
+pathPrefix: /addons/cmdb
+
+# -- Ingress -----------------------------------------------------------------
+# One path on the portal's existing hostname. The portal's own Ingress keeps "/"
+# and "/api"; this one adds pathPrefix, and longest-prefix matching sends it here.
+# Use the same ingress class as the portal's Ingress, or the two rules live on
+# different controllers and this path is not served on that hostname at all.
+ingress:
+  enabled: true
+  className: ""
+  annotations: {}
+  # The PORTAL's hostname. Required while the ingress is on.
+  host: ""
+  tls:
+    enabled: false
+    # Usually the portal's certificate secret. Empty with tls.enabled uses the
+    # ingress controller's default certificate.
+    secretName: ""
+
+# -- Gateway API -------------------------------------------------------------
+# The same path as an HTTPRoute, for a portal published through Gateway API. Off
+# by default because it needs the Gateway API CRDs and a Gateway to attach to.
+# Both can be on at once, as with the portal chart, so a migration can run the two
+# side by side while DNS moves.
+httpRoute:
+  enabled: false
+  annotations: {}
+  # The Gateway the portal's route attaches to. One in another namespace needs a
+  # ReferenceGrant on that side allowing this namespace -- the chart cannot create
+  # it, and a route without it is accepted and never programmed.
+  parentRefs:
+    - name: ""
+      namespace: ""
+      sectionName: ""
+      port: null
+  # The portal's hostname(s). At least one: a route with none attaches to every
+  # hostname its Gateway serves.
+  hostnames: []
+
+# -- Components --------------------------------------------------------------
+api:
+  # The API creates the schema at start-up; more than one replica is fine once it
+  # exists.
+  replicaCount: 1
+  # Its own account, named <release>-aep-addon-cmdb-api. It carries no Azure
+  # identity: the API validates tokens, it never asks for one.
+  serviceAccount:
+    create: true
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 384Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+
+worker:
+  # No replicaCount and no autoscaling, on purpose. Each discovery pass plans
+  # against the database as it found it, so a second replica would plan against
+  # the first and write the same changes twice. The Deployment hardcodes 1.
+
+  # The token the worker presents to the portal comes from a user-assigned
+  # managed identity holding the portal's AEP.AddOn app role, through workload
+  # identity. Nothing is stored: the token is projected into the pod.
+  workloadIdentity:
+    enabled: true
+    # Client id of that managed identity. Its federated credential names this
+    # cluster's OIDC issuer and the subject
+    #   system:serviceaccount:<namespace>:<release>-aep-addon-cmdb-worker
+    clientId: ""
+  # Its own account, named <release>-aep-addon-cmdb-worker. There is no name
+  # override: the name has to match the federated credential's subject.
+  serviceAccount:
+    create: true
+    annotations: {}
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  podAnnotations: {}
+  extraEnv: []
+
+# -- Application settings ----------------------------------------------------
+config:
+  # How often the worker checks the portal for a new completed sync (and for a
+  # pass requested from the UI). Minimum 5. -> Discovery__PollSeconds
+  discoveryPollSeconds: 60
+  # Application Map edges with fewer calls in the window are ignored.
+  # -> Discovery__AppMap__MinCalls
+  appMapMinCalls: 10
+  # Days an accepted Application Map relation can go unseen before a removal is
+  # proposed. -> Discovery__AppMap__StaleAfterDays
+  appMapStaleAfterDays: 14
+  # Anything else, mapped straight into the ConfigMap. Keys are ASP.NET
+  # configuration paths, e.g. Cmdb__EnvironmentAliases__production: "prd".
+  extra: {}
+
+# Both pods. The uid is numeric because Kubernetes only reads the image config and
+# cannot resolve a user name -- runAsNonRoot against an image whose USER is a name
+# is refused at admission. It matches the uid baked into the image.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  # The worker's liveness heartbeat is a file in /tmp.
+  readOnlyRootFilesystem: false
+  capabilities:
+    drop: ["ALL"]

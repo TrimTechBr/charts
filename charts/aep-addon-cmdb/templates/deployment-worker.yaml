@@ -1,0 +1,101 @@
+{{- include "cmdb.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-worker" (include "cmdb.fullname" .) }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  {{- /*
+    One, and not configurable. A pass plans against the database as it found it,
+    so a second replica would plan against the first.
+  */}}
+  replicas: 1
+  {{- /*
+    Recreate, not RollingUpdate: a rollout would otherwise keep the old and the new
+    worker alive at once, which is the two-replica case for the length of it.
+  */}}
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      {{- include "cmdb.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cmdb.componentSelectorLabels" (dict "root" . "component" "worker") | nindent 8 }}
+        {{- /*
+          Workload identity is opted into per pod -- and only on the pod that asks
+          for a token. The API never does.
+        */}}
+        {{- if .Values.worker.workloadIdentity.enabled }}
+        azure.workload.identity/use: "true"
+        {{- end }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.worker.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "cmdb.serviceAccountName" (dict "root" . "component" "worker") }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: worker
+          image: {{ include "cmdb.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          {{- /*
+            The image's entrypoint is the API; the worker ships beside it in
+            /app/worker. It pins its content root to its own directory, so the
+            image's working directory (/app/api) does not leak the API's settings
+            into it.
+          */}}
+          command: ["dotnet", "/app/worker/TrimTech.AepCmdb.Worker.dll"]
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "cmdb.fullname" . }}
+          env:
+            {{- include "cmdb.commonEnv" . | nindent 12 }}
+            - name: Aep__BaseUrl
+              value: {{ .Values.aep.apiUrl | quote }}
+            - name: Aep__Scope
+              value: {{ .Values.aep.scope | quote }}
+            {{- with .Values.worker.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- /*
+            The worker serves no HTTP. It touches /tmp/worker.healthy every poll and
+            between the steps of a pass, so liveness is "the file is recent". The
+            window follows the poll interval -- three polls, never under five
+            minutes -- or a poll set above two minutes would have a healthy worker
+            killed between beats.
+          */}}
+          {{- $poll := int .Values.config.discoveryPollSeconds }}
+          livenessProbe:
+            exec:
+              command: ["find", "/tmp/worker.healthy", "-mmin", {{ printf "-%d" (max 5 (add1 (div (mul $poll 3) 60))) | quote }}]
+            initialDelaySeconds: 30
+            periodSeconds: 60
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.worker.resources | nindent 12 }}
+      {{- with .Values.worker.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.worker.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

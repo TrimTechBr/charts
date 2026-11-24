@@ -1,0 +1,19 @@
+{{- /*
+The API only. The worker serves no HTTP, so a Service for it would be a name
+that resolves to nothing listening.
+*/ -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ printf "%s-api" (include "cmdb.fullname" .) }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "cmdb.componentSelectorLabels" (dict "root" . "component" "api") | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

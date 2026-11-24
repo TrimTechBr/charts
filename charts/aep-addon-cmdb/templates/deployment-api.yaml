@@ -1,0 +1,119 @@
+{{- include "cmdb.validate" . -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ printf "%s-api" (include "cmdb.fullname" .) }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+spec:
+  replicas: {{ .Values.api.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "cmdb.componentSelectorLabels" (dict "root" . "component" "api") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "cmdb.componentSelectorLabels" (dict "root" . "component" "api") | nindent 8 }}
+      annotations:
+        {{- /*
+          Restarts the pods when the settings change. Without it a helm upgrade
+          that only touches the ConfigMap changes nothing a running pod reads.
+        */}}
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.api.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "cmdb.serviceAccountName" (dict "root" . "component" "api") }}
+      {{- with .Values.image.pullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: api
+          image: {{ include "cmdb.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "cmdb.fullname" . }}
+          env:
+            - name: ASPNETCORE_URLS
+              value: http://+:8080
+            {{- include "cmdb.commonEnv" . | nindent 12 }}
+            {{- /*
+              Token validation. The API refuses to start outside Development
+              without tenant and client id, and _validate.tpl refuses to render
+              without them, so they are never empty here.
+            */}}
+            - name: AzureAd__ClientId
+              value: {{ .Values.auth.clientId | quote }}
+            {{- with .Values.auth.audience }}
+            - name: AzureAd__Audience
+              value: {{ . | quote }}
+            {{- end }}
+            {{- /*
+              Only when set: empty, the API derives api://<clientId>/access_as_user
+              itself, and an empty variable would read as "set to nothing".
+            */}}
+            {{- with .Values.auth.apiScope }}
+            - name: Cmdb__ApiScope
+              value: {{ . | quote }}
+            {{- end }}
+            {{- with .Values.api.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- /*
+            Without the path prefix on purpose: the API is mounted under
+            Cmdb__PathBase, and a request without it still matches -- which is what
+            the kubelet sends, since it talks to the pod and not through the
+            Ingress. The startup probe covers the schema creation on first boot,
+            which a liveness probe alone would read as a hung process.
+          */}}
+          startupProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            timeoutSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: http
+            periodSeconds: 30
+            timeoutSeconds: 5
+            failureThreshold: 3
+          {{- /*
+            Ready means the database answers and holds the schema: the endpoint
+            reads a table and returns 503 otherwise.
+          */}}
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.api.resources | nindent 12 }}
+      {{- with .Values.api.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.api.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

@@ -1,0 +1,44 @@
+{{- include "cmdb.validate" . -}}
+{{- if .Values.httpRoute.enabled }}
+{{/*
+  The Gateway API form of the Ingress: pathPrefix on the portal's hostname, to the
+  CMDB API. Gateway API specifies longest-prefix matching across routes, so the
+  portal's own route keeps "/" and "/api" and this one takes only its prefix.
+*/}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ include "cmdb.fullname" . }}
+  labels:
+    {{- include "cmdb.labels" . | nindent 4 }}
+  {{- with .Values.httpRoute.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  parentRefs:
+    {{- range .Values.httpRoute.parentRefs }}
+    - name: {{ .name }}
+      {{- with .namespace }}
+      namespace: {{ . }}
+      {{- end }}
+      {{- with .sectionName }}
+      sectionName: {{ . }}
+      {{- end }}
+      {{- with .port }}
+      port: {{ . }}
+      {{- end }}
+    {{- end }}
+  hostnames:
+    {{- range .Values.httpRoute.hostnames }}
+    - {{ . | quote }}
+    {{- end }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.pathPrefix | quote }}
+      backendRefs:
+        - name: {{ printf "%s-api" (include "cmdb.fullname" .) }}
+          port: 80
+{{- end }}

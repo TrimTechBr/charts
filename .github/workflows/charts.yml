@@ -130,6 +130,29 @@ jobs:
           expect_fail "agent without a portal URL"        "portal.url is required" $A --set portal.clusterId=x --set portal.apiKey=k || failed=1
           expect_fail "agent without a cluster id"        "portal.clusterId is required" $A --set portal.url=https://e --set portal.apiKey=k || failed=1
           expect_fail "agent without a key"               "An agent key is required" $A --set portal.url=https://e --set portal.clusterId=x || failed=1
+          # $CMDB is every setting the cmdb chart needs; each case then clears or
+          # breaks exactly one (a later --set wins), so the refusal can only come
+          # from the guard it names. The baseline is rendered first: if it were
+          # refused itself, every case below would pass while testing nothing.
+          C=charts/aep-addon-cmdb
+          CMDB="--set database.existingSecret=d --set auth.tenantId=t --set auth.clientId=c --set aep.apiUrl=http://portal-api/ --set aep.scope=api://p/.default --set worker.workloadIdentity.clientId=w --set ingress.host=estate.example.com"
+          helm template t $C $CMDB >/dev/null || { echo "::error::the cmdb baseline is refused, so its refusal cases prove nothing"; failed=1; }
+          expect_fail "cmdb without a database"           "for the CMDB's own database is required" $C $CMDB --set database.existingSecret= || failed=1
+          expect_fail "cmdb without auth"                 "auth.tenantId and auth.clientId are required" $C $CMDB --set auth.tenantId= --set auth.clientId= || failed=1
+          expect_fail "cmdb with auth cleared to null"    "auth.tenantId and auth.clientId are required" $C $CMDB --set auth=null || failed=1
+          expect_fail "cmdb with database cleared to null" "for the CMDB's own database is required" $C $CMDB --set database=null || failed=1
+          expect_fail "cmdb with aep cleared to null"     "aep.apiUrl must be the absolute http(s) URL" $C $CMDB --set aep=null || failed=1
+          expect_fail "cmdb without the portal API URL"   "aep.apiUrl must be the absolute http(s) URL" $C $CMDB --set aep.apiUrl= || failed=1
+          expect_fail "cmdb with a relative portal API URL" "aep.apiUrl must be the absolute http(s) URL" $C $CMDB --set aep.apiUrl=portal-api || failed=1
+          expect_fail "cmdb without the AEP scope"        "aep.scope is required" $C $CMDB --set aep.scope= || failed=1
+          expect_fail "cmdb without the worker identity"  "worker.workloadIdentity.clientId is required" $C $CMDB --set worker.workloadIdentity.clientId= || failed=1
+          expect_fail "cmdb ingress without a host"       "ingress.host is required" $C $CMDB --set ingress.host= || failed=1
+          expect_fail "cmdb route without a gateway"      "httpRoute.parentRefs[0].name is required" $C $CMDB --set httpRoute.enabled=true --set httpRoute.hostnames[0]=estate.example.com || failed=1
+          expect_fail "cmdb route without a hostname"     "httpRoute.hostnames must name at least one hostname" $C $CMDB --set httpRoute.enabled=true --set httpRoute.parentRefs[0].name=g || failed=1
+          expect_fail "cmdb with a second worker"         "The worker runs one replica" $C $CMDB --set worker.replicaCount=2 || failed=1
+          expect_fail "cmdb with an autoscaled worker"    "The worker cannot be autoscaled" $C $CMDB --set worker.autoscaling.enabled=true || failed=1
+          expect_fail "cmdb on the portal's API path"     "pathPrefix \"/api/cmdb\" cannot be used" $C $CMDB --set pathPrefix=/api/cmdb || failed=1
+          expect_fail "cmdb with a trailing slash"        "pathPrefix \"/addons/cmdb/\" cannot be used" $C $CMDB --set pathPrefix=/addons/cmdb/ || failed=1
           exit $failed
 
   # ----------------------------------------------------------------------------
