@@ -14,9 +14,29 @@ httpRoute:
     - estate.ci.example
   apiPaths:
     - /api
-    - /swagger
 
 worker:
   azure:
     workloadIdentity:
       clientId: "11111111-1111-1111-1111-111111111111"
+
+api:
+  auth:
+    tenantId: "00000000-0000-0000-0000-000000000000"
+    clientId: "33333333-3333-3333-3333-333333333333"
+    audience: "api://estate-api.ci.example"
+
+# The SPA with a registration of its own and the API under a custom Application
+# ID URI, so the scope is stated rather than derived; and two add-ons: one on this host under /addons/<id>/ (the normal
+# shape), one absolute whose URL carries "&" and "#" -- characters that a shell,
+# sed or a careless quote would mangle on the way to addons.json.
+webapp:
+  azureAd:
+    clientId: "44444444-4444-4444-4444-444444444444"
+    apiScope: "api://estate-api.ci.example/access_as_user"
+
+addons:
+  - id: cmdb
+    manifestUrl: /addons/cmdb/manifest.json
+  - id: sample-addon
+    manifestUrl: "https://addons.ci.example/sample/manifest.json?a=1&b=2#frag"

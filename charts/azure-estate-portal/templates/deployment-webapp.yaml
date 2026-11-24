@@ -28,7 +28,7 @@ spec:
           change only reaches a browser after the pods restart, and this is what
           restarts them.
         */}}
-        checksum/webapp-config: {{ printf "%s|%s|%s" (include "estate.apiBaseUrl" .) .Values.webapp.azureAd.tenantId .Values.webapp.azureAd.clientId | sha256sum }}
+        checksum/webapp-config: {{ printf "%s|%s|%s|%s|%s" (include "estate.apiBaseUrl" .) (include "estate.webappTenantId" .) (include "estate.webappClientId" .) (include "estate.apiScope" .) (include "estate.addonsJson" .) | sha256sum }}
         {{- with .Values.webapp.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -69,12 +69,25 @@ spec:
             {{- /*
               Sign-in for the UI. Deliberately separate from the identity the
               worker uses to read Azure -- different question, possibly different
-              tenant.
+              tenant. Defaults to the API's registration.
             */}}
             - name: AZURE_TENANT_ID
-              value: {{ .Values.webapp.azureAd.tenantId | quote }}
+              value: {{ include "estate.webappTenantId" . | quote }}
             - name: AZURE_CLIENT_ID
-              value: {{ .Values.webapp.azureAd.clientId | quote }}
+              value: {{ include "estate.webappClientId" . | quote }}
+            {{- /*
+              The scope of the token the SPA attaches to every API call. The
+              entrypoint substitutes it with sed using "#" as the delimiter, which
+              is why a scope can never contain one -- an Entra scope cannot anyway.
+            */}}
+            - name: API_SCOPE
+              value: {{ include "estate.apiScope" . | quote }}
+            {{- /*
+              Written whole to addons.json, not spliced into appsettings.json: a
+              bad value can only break the add-ons, and the portal still boots.
+            */}}
+            - name: ADDONS_JSON
+              value: {{ include "estate.addonsJson" . | quote }}
           livenessProbe:
             httpGet:
               path: /index.html

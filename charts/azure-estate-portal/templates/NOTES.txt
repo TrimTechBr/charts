@@ -21,6 +21,15 @@ The ingress is disabled, so nothing is published. Point your own gateway at:
   on screen.
 {{- end }}
 
+Sign-in and every API call use the app registration {{ .Values.api.auth.clientId }}.
+Nobody can open the portal until they hold one of its app roles: assign users or
+groups to AEP.Reader or AEP.Admin on its enterprise application.
+{{- with .Values.addons }}
+
+Add-ons: {{ range $i, $a := . }}{{ if $i }}, {{ end }}{{ $a.id }}{{ end }}. Each is listed under
+Operations -> Add-ons, with the reason if it did not load.
+{{- end }}
+
 Check it came up:
 
     kubectl --namespace {{ .Release.Namespace }} rollout status deploy/{{ printf "%s-api" (include "estate.fullname" .) }}

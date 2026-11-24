@@ -5,8 +5,8 @@ type: application
 
 # The chart's own version, bumped for any change to the chart. appVersion tracks
 # the product, which releases on its own cadence.
-version: 0.2.7
-appVersion: "0.9.0"
+version: 0.3.0
+appVersion: "0.12.0"
 
 home: https://github.com/TrimTechBr/charts
 sources:
@@ -28,15 +28,25 @@ annotations:
   artifacthub.io/license: MIT
   artifacthub.io/images: |
     - name: api
-      image: ghcr.io/trimtechbr/azure-estate/api:0.8.0
+      image: ghcr.io/trimtechbr/azure-estate/api:0.12.0
     - name: worker
-      image: ghcr.io/trimtechbr/azure-estate/worker:0.8.0
+      image: ghcr.io/trimtechbr/azure-estate/worker:0.12.0
     - name: webapp
-      image: ghcr.io/trimtechbr/azure-estate/webapp:0.8.0
+      image: ghcr.io/trimtechbr/azure-estate/webapp:0.12.0
   artifacthub.io/links: |
     - name: source
       url: https://github.com/TrimTechBr/charts
   artifacthub.io/changes: |
+    - kind: changed
+      description: The API now requires an Entra ID token. api.auth.tenantId and api.auth.clientId are required and the chart refuses to render without them, because the API refuses to start without them. webapp.azureAd.* default to the same registration
+    - kind: added
+      description: An addons block -- add-ons the UI loads at runtime, each from its own backend under /addons/<id>/ on the same host -- and webapp.azureAd.apiScope
+    - kind: added
+      description: config.collectApplicationMap, the Application Map collector of portal 0.12.0
+    - kind: removed
+      description: The /swagger advice. The API explorer exists only in Development
+    - kind: fixed
+      description: The refusal checks in CI passed the old top-level azure block, so every portal case was refused for the missing worker identity rather than its own reason. Each case now also names the message it expects
     - kind: added
       description: An HTTPRoute alternative to the Ingress, for clusters running Gateway API. Both can be on at once, so a migration can run the two side by side while DNS moves
     - kind: fixed

@@ -18,6 +18,11 @@ needs a URL a browser can reach; a cluster-internal service name will not do.
 - `Reader`
 - `Monitoring Reader`
 - `AcrPull`, per container registry you want inventoried from the inside
+- `Log Analytics Reader`, only on Log Analytics workspaces set to require
+  workspace permissions -- see [Application Map](#application-map)
+
+**An Entra ID app registration** for sign-in and for the API's tokens. The chart
+refuses to render without it -- see [Authentication](#authentication).
 
 ## Installing
 
@@ -30,6 +35,8 @@ kubectl -n estate create secret generic estate-db \
 helm install estate oci://ghcr.io/trimtechbr/charts/azure-estate-portal \
   --namespace estate \
   --set database.existingSecret=estate-db \
+  --set api.auth.tenantId=<tenant> \
+  --set api.auth.clientId=<app registration client id> \
   --set worker.azure.tenantId=<tenant> \
   --set worker.azure.workloadIdentity.clientId=<managed identity client id> \
   --set ingress.host=estate.example.com \
@@ -50,8 +57,104 @@ under `/api`. Add more paths if you want them published:
 ingress:
   apiPaths:
     - /api
-    - /swagger     # the API explorer
+    - /health      # to probe from outside the cluster
 ```
+
+There is no `/swagger` to publish: the API explorer exists only in Development,
+because an anonymous description of an API that requires a token is not something
+to leave on the internet.
+
+## Authentication
+
+The API validates an Entra ID token on every call. The only anonymous endpoints are
+`/health*` and `/api/health*` (the probes), and the three the in-cluster agent calls,
+which authenticate with their per-cluster `X-Estate-Agent-Key` instead. Outside
+Development the API **refuses to start** without its tenant and client id, and there
+is no setting that turns this off -- so the chart refuses to render without them,
+rather than install a pod that crash-loops.
+
+One app registration serves both the UI and the API, and the chart's defaults assume
+it:
+
+1. **Expose an API**: Application ID URI `api://<client id>`, scope `access_as_user`.
+2. **App roles**:
+
+   | Role | Allowed member types | Grants |
+   |---|---|---|
+   | `AEP.Reader` | Users/Groups | Read everything |
+   | `AEP.Admin` | Users/Groups | Also: trigger a sync, settings, schedules, backup/restore, delete data, agent keys |
+   | `AEP.AddOn` | Applications | The read-only add-on API, for an add-on's own managed identity |
+
+3. **Enterprise application**: assign users or groups to `AEP.Reader` / `AEP.Admin`.
+   Someone who signs in with neither sees a page saying so, not the portal.
+4. **Authentication**: a Single-page application platform with the portal's URL
+   as redirect URI.
+
+`AEP.AddOn` is assigned to an add-on's managed identity with Graph
+(`appRoleAssignments`) -- the Azure portal has no screen for assigning an app role
+to a managed identity.
+
+```yaml
+api:
+  auth:
+    tenantId: <tenant id>
+    clientId: <client id>
+    audience: ""            # only for a custom Application ID URI; the client id and
+                            # api://<client id> are always accepted
+```
+
+The UI signs in with the same registration and asks for
+`api://<api.auth.clientId>/access_as_user`. Set `webapp.azureAd.tenantId`,
+`webapp.azureAd.clientId` or `webapp.azureAd.apiScope` only when the UI has a
+registration of its own; the scope is always the API's.
+
+> **Upgrading an install from before 0.3.0?** Create the app registration and add
+> `api.auth.tenantId` and `api.auth.clientId` to your values first -- an upgrade
+> without them is refused. If `webapp.azureAd.*` was already set for the UI's
+> sign-in, that registration can become the API's too: expose the scope and add
+> the roles on it, then point `api.auth.*` at it. Assign the roles before the
+> upgrade, or every user lands on the "no role" page.
+
+## Add-ons
+
+Add-ons extend the portal with pages of their own, loaded by the UI at runtime from
+each add-on's own backend. They appear in the portal's menu, breadcrumb and Ctrl+K
+search like any built-in page.
+
+```yaml
+addons:
+  - id: cmdb
+    manifestUrl: /addons/cmdb/manifest.json
+```
+
+Two prefixes per add-on, on purpose:
+
+| Prefix | Served by | |
+|---|---|---|
+| `/addons/<id>/` | the add-on's backend | Routed by the add-on's own chart, on this same host -- so no CORS |
+| `/apps/<id>/` | this chart's UI | The add-on's pages. If they used `/addons/`, reloading a deep link would reach the add-on's API instead of the UI |
+
+A relative `manifestUrl` is resolved against the portal's own origin, which is the
+normal case. Each `id` must match `^[a-z][a-z0-9-]{1,31}$`, equal the id in the
+add-on's manifest, and be unique; the chart refuses anything else. The list is
+written into the UI as `addons.json` when the web pods start, so a change restarts
+them. An add-on that fails to load -- unreachable, incompatible SDK, a bad
+manifest -- shows why under **Operations -> Add-ons**, and the rest of the portal
+is unaffected.
+
+The CMDB add-on is installed with its own chart, `aep-addon-cmdb`, which publishes
+its backend under `/addons/cmdb/` on the portal's host. It calls the portal's API
+with its own managed identity, which needs the `AEP.AddOn` role above.
+
+## Application Map
+
+The worker collects who-calls-whom from the dependency telemetry of every
+Application Insights component it inventories (`config.collectApplicationMap`, on by
+default). `Reader` is enough while the backing workspace allows resource-context
+access, which is the default. A workspace set to **require workspace permissions**
+answers 403 instead: grant the worker's identity `Log Analytics Reader` on that
+workspace. Until then the components are listed as a collection error naming the
+role, and the sync completes without their edges.
 
 ## Gateway API instead of Ingress
 
@@ -175,7 +278,13 @@ worker:
 | `httpRoute.parentRefs[0].name` | `""` | Required when enabled -- the Gateway to attach to. |
 | `ingress.apiPaths` | `[/api]` | What the API serves through the ingress. |
 | `webapp.apiBaseUrl` | derived | What the browser calls. Only set it when the UI and API are on different hosts. |
-| `webapp.azureAd.*` | `""` | Sign-in for the UI (MSAL). Separate from `worker.azure.*`, which is how the worker reads Azure -- possibly a different tenant. |
+| `api.auth.tenantId` | `""` | Required. The tenant that issues the API's tokens. |
+| `api.auth.clientId` | `""` | Required. The app registration that exposes the API. |
+| `api.auth.audience` | `""` | An extra accepted audience, for a custom Application ID URI. |
+| `webapp.azureAd.tenantId`, `.clientId` | `""` | Sign-in for the UI (MSAL). Empty uses `api.auth.*`. Separate from `worker.azure.*`, which is how the worker reads Azure -- possibly a different tenant. |
+| `webapp.azureAd.apiScope` | derived | `api://<api.auth.clientId>/access_as_user` when empty. |
+| `addons` | `[]` | Add-ons the UI loads, as `{id, manifestUrl}`. |
+| `config.collectApplicationMap` | `true` | Application Map edges. `Log Analytics Reader` on workspaces that require workspace permissions. |
 | `config.collectKubernetesWorkloads` | `false` | Needs the agent chart installed in each cluster. |
 | `config.collectAcrDataPlane` | `true` | Registry contents. Needs `AcrPull` per registry. |
 | `config.extra` | `{}` | Any other setting, as ASP.NET configuration keys: `Metrics__WindowDays: "14"`. |
@@ -192,6 +301,8 @@ Each of these would otherwise install cleanly and fail later, when nobody is
 watching the terminal:
 
 - no database configured
+- no `api.auth.tenantId` or `api.auth.clientId` -- the API would refuse to start
+- an add-on with an invalid id, no `manifestUrl`, or an id used twice
 - both Azure identity paths enabled
 - workload identity without a client id
 - nothing publishing the portal and no `webapp.apiBaseUrl`

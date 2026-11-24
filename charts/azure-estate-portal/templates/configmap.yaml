@@ -9,6 +9,7 @@ data:
   Database__Provider: "PostgreSQL"
   Kubernetes__CollectWorkloads: {{ .Values.config.collectKubernetesWorkloads | quote }}
   Acr__CollectDataPlane: {{ .Values.config.collectAcrDataPlane | quote }}
+  AppMap__Enabled: {{ .Values.config.collectApplicationMap | quote }}
   Sync__SubscriptionConcurrency: {{ .Values.config.subscriptionConcurrency | quote }}
   {{- range $key, $value := .Values.config.extra }}
   {{ $key }}: {{ $value | quote }}

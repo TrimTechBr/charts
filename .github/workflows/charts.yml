@@ -90,12 +90,24 @@ jobs:
 
       # The guards exist to fail at render time rather than at run time. A guard
       # that stopped firing would be invisible, so each one is asserted here.
+      #
+      # Each case also names a phrase from the message it expects. A refusal is
+      # only evidence for the guard it was written for: these lines once passed
+      # --set azure.workloadIdentity.clientId, after that block had moved under
+      # worker:, and every portal case was refused for the missing worker identity
+      # instead -- passing, while testing nothing. $AUTH and $WI are the settings
+      # every portal case needs so that only the thing it names is missing.
       - name: The refusals still refuse
         run: |
           expect_fail() {
-            desc="$1"; shift
-            if helm template t "$@" >/dev/null 2>&1; then
+            desc="$1"; reason="$2"; shift 2
+            if out=$(helm template t "$@" 2>&1); then
               echo "::error::expected a refusal and got a render: $desc"
+              return 1
+            fi
+            if ! printf '%s' "$out" | grep -qF -- "$reason"; then
+              echo "::error::refused for another reason: $desc (expected \"$reason\")"
+              printf '%s\n' "$out"
               return 1
             fi
             echo "  refused as expected: $desc"
@@ -103,14 +115,21 @@ jobs:
           failed=0
           P=charts/azure-estate-portal
           A=charts/azure-estate-agent
-          expect_fail "portal without a database"        $P --set azure.workloadIdentity.clientId=c || failed=1
-          expect_fail "portal with both identity paths"  $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set azure.clientSecret.enabled=true --set azure.clientSecret.clientId=c --set azure.clientSecret.value=v || failed=1
-          expect_fail "portal with a second worker"      $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set worker.replicaCount=2 || failed=1
-          expect_fail "portal with no ingress and no URL" $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set ingress.enabled=false || failed=1
-          expect_fail "portal route with no gateway"    $P --set database.existingSecret=d --set azure.workloadIdentity.clientId=c --set ingress.enabled=false --set httpRoute.enabled=true || failed=1
-          expect_fail "agent without a portal URL"       $A --set portal.clusterId=x --set portal.apiKey=k || failed=1
-          expect_fail "agent without a cluster id"       $A --set portal.url=https://e --set portal.apiKey=k || failed=1
-          expect_fail "agent without a key"              $A --set portal.url=https://e --set portal.clusterId=x || failed=1
+          AUTH="--set api.auth.tenantId=t --set api.auth.clientId=c"
+          WI="--set worker.azure.workloadIdentity.clientId=c"
+          expect_fail "portal without a database"         "A PostgreSQL connection string is required" $P $AUTH $WI || failed=1
+          expect_fail "portal without api auth"           "api.auth.tenantId and api.auth.clientId are required" $P --set database.existingSecret=d $WI || failed=1
+          expect_fail "portal without api client id"      "api.auth.tenantId and api.auth.clientId are required" $P --set database.existingSecret=d $WI --set api.auth.tenantId=t || failed=1
+          expect_fail "portal with both identity paths"   "are both on" $P --set database.existingSecret=d $AUTH $WI --set worker.azure.clientSecret.enabled=true --set worker.azure.clientSecret.clientId=c --set worker.azure.clientSecret.value=v || failed=1
+          expect_fail "portal with a second worker"       "The worker runs one replica" $P --set database.existingSecret=d $AUTH $WI --set worker.replicaCount=2 || failed=1
+          expect_fail "portal with no ingress and no URL" "Nothing publishes the portal" $P --set database.existingSecret=d $AUTH $WI --set ingress.enabled=false || failed=1
+          expect_fail "portal route with no gateway"      "httpRoute.parentRefs[0].name is required" $P --set database.existingSecret=d $AUTH $WI --set ingress.enabled=false --set httpRoute.enabled=true || failed=1
+          expect_fail "portal add-on without a manifest URL" "has no manifestUrl" $P --set database.existingSecret=d $AUTH $WI --set addons[0].id=cmdb || failed=1
+          expect_fail "portal add-on with a bad id"       "is not a valid add-on id" $P --set database.existingSecret=d $AUTH $WI --set addons[0].id=CMDB --set addons[0].manifestUrl=/addons/cmdb/manifest.json || failed=1
+          expect_fail "portal with duplicate add-on ids"  "appears more than once" $P --set database.existingSecret=d $AUTH $WI --set addons[0].id=cmdb --set addons[0].manifestUrl=/a --set addons[1].id=cmdb --set addons[1].manifestUrl=/b || failed=1
+          expect_fail "agent without a portal URL"        "portal.url is required" $A --set portal.clusterId=x --set portal.apiKey=k || failed=1
+          expect_fail "agent without a cluster id"        "portal.clusterId is required" $A --set portal.url=https://e --set portal.apiKey=k || failed=1
+          expect_fail "agent without a key"               "An agent key is required" $A --set portal.url=https://e --set portal.clusterId=x || failed=1
           exit $failed
 
   # ----------------------------------------------------------------------------
